@@ -38,6 +38,30 @@ export class PositionService {
     return this.repository.findAllOpen();
   }
 
+  increaseQuantity(
+    id: number,
+    additionalQuantity: number,
+    executionPrice: number,
+  ): void {
+    this.repository.increaseQuantity(
+      id,
+      additionalQuantity,
+      executionPrice,
+    );
+  }
+
+  reduceQuantity(
+    id: number,
+    quantity: number,
+    realizedPnl: number,
+  ): void {
+    this.repository.reduceQuantity(
+      id,
+      quantity,
+      realizedPnl,
+    );
+  }
+
   updateMarketValue(
     id: number,
     currentPrice: number,

@@ -84,6 +84,141 @@ export class PositionRepository {
     );
   }
 
+  increaseQuantity(
+    id: number,
+    additionalQuantity: number,
+    executionPrice: number,
+  ): void {
+    const position = this.db.get<StoredPosition>(
+      `
+        SELECT *
+        FROM positions
+        WHERE id = ?
+          AND status = 'OPEN'
+      `,
+      [id],
+    );
+
+    if (!position) {
+      throw new Error(
+        `Open position not found: ${id}`,
+      );
+    }
+
+    if (
+      !Number.isFinite(additionalQuantity) ||
+      additionalQuantity <= 0
+    ) {
+      throw new Error(
+        "Additional position quantity must be greater than zero",
+      );
+    }
+
+    if (
+      !Number.isFinite(executionPrice) ||
+      executionPrice <= 0
+    ) {
+      throw new Error(
+        "Execution price must be greater than zero",
+      );
+    }
+
+    const totalQuantity =
+      position.quantity + additionalQuantity;
+
+    const weightedEntry =
+      (
+        position.quantity * position.entry_price +
+        additionalQuantity * executionPrice
+      ) / totalQuantity;
+
+    this.db.run(
+      `
+        UPDATE positions
+        SET
+          quantity = ?,
+          entry_price = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND status = 'OPEN'
+      `,
+      [
+        totalQuantity,
+        weightedEntry,
+        id,
+      ],
+    );
+  }
+
+  reduceQuantity(
+    id: number,
+    quantity: number,
+    realizedPnl: number,
+  ): void {
+    const position = this.db.get<StoredPosition>(
+      `
+        SELECT *
+        FROM positions
+        WHERE id = ?
+          AND status = 'OPEN'
+      `,
+      [id],
+    );
+
+    if (!position) {
+      throw new Error(
+        `Open position not found: ${id}`,
+      );
+    }
+
+    if (
+      !Number.isFinite(quantity) ||
+      quantity <= 0
+    ) {
+      throw new Error(
+        "Reduced position quantity must be greater than zero",
+      );
+    }
+
+    if (quantity > position.quantity) {
+      throw new Error(
+        `Cannot reduce ${quantity}; position quantity is ${position.quantity}`,
+      );
+    }
+
+    const remainingQuantity =
+      position.quantity - quantity;
+
+    const accumulatedRealizedPnl =
+      position.realized_pnl + realizedPnl;
+
+    if (remainingQuantity <= 1e-12) {
+      this.close(
+        id,
+        accumulatedRealizedPnl,
+      );
+
+      return;
+    }
+
+    this.db.run(
+      `
+        UPDATE positions
+        SET
+          quantity = ?,
+          realized_pnl = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+          AND status = 'OPEN'
+      `,
+      [
+        remainingQuantity,
+        accumulatedRealizedPnl,
+        id,
+      ],
+    );
+  }
+
   updateMarketValue(
     id: number,
     currentPrice: number,

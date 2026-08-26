@@ -17,10 +17,17 @@ import {
   OrderPersistenceService,
 } from "./services";
 
+import {
+  ExecutionReconciliationService,
+} from "./ExecutionReconciliationService";
+
 export interface StrategyExecutionResult {
   order: ExchangeOrder;
   request: ExchangeOrderRequest;
   persistedOrderId?: number;
+  reconciliation?: Awaited<
+    ReturnType<ExecutionReconciliationService["reconcile"]>
+  >;
 }
 
 export class StrategyExecutionService {
@@ -29,6 +36,7 @@ export class StrategyExecutionService {
   constructor(
     private readonly orderService: OrderService,
     private readonly orderPersistence?: OrderPersistenceService,
+    private readonly reconciliation?: ExecutionReconciliationService,
   ) {
     this.resolver =
       new StrategyOrderResolver(
@@ -56,10 +64,28 @@ export class StrategyExecutionService {
         ? this.orderPersistence.save(order)
         : undefined;
 
+    /*
+     * Reconcile immediately after submission.
+     *
+     * The exchange response may already contain a
+     * partial/full execution. Reconciliation fetches
+     * the latest cumulative exchange state and lets
+     * ExecutionAccountingService record only the
+     * newly executed quantity.
+     */
+    const reconciliation =
+      this.reconciliation
+        ? await this.reconciliation.reconcile(
+            order.symbol,
+            order.orderId,
+          )
+        : undefined;
+
     return {
       request: resolved.request,
       order,
       persistedOrderId,
+      reconciliation,
     };
   }
 }

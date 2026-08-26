@@ -3,3 +3,4 @@ export * from "./MarketDataService";
 export * from "./OrderService";
 export * from "./OrderPersistenceService";
 export * from "./PositionService";
+export * from "./TradePersistenceService";

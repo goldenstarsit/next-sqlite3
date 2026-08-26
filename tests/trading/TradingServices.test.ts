@@ -60,7 +60,17 @@ function createMockExchange(): Exchange {
       }),
 
     getOrder:
-      vi.fn(),
+      vi.fn().mockResolvedValue({
+        symbol: "BTCUSDT",
+        orderId: "order-1",
+        side: "BUY",
+        type: "MARKET",
+        status: "FILLED",
+        price: 65000,
+        originalQuantity: 0.001,
+        executedQuantity: 0.001,
+        transactTime: 1720000000000,
+      }),
 
     cancelOrder:
       vi.fn(),
