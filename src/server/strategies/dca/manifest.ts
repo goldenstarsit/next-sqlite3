@@ -1,4 +1,6 @@
-import type { StrategyManifest } from "../core/types";
+import type {
+  StrategyManifest,
+} from "../core/types";
 
 export const dcaManifest: StrategyManifest = {
   id: "dca",

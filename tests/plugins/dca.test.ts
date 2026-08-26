@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DcaPlugin,
   type DcaConfig,
-} from "../../src/server/plugins/dca";
+} from "../../src/server/strategies/dca";
 
 const config: DcaConfig = {
   enabled: true,

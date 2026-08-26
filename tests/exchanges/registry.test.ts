@@ -298,3 +298,61 @@ describe("Exchange config validation", () => {
     );
   });
 });
+
+
+describe("Exchange config collection", () => {
+  it("returns independent default config copies", async () => {
+    const {
+      getDefaultExchangeConfigs,
+    } = await import(
+      "../../src/server/exchanges/core/config"
+    );
+
+    const configs = getDefaultExchangeConfigs();
+
+    expect(configs).toEqual([
+      {
+        id: "binance",
+        enabled: false,
+      },
+      {
+        id: "mexc",
+        enabled: false,
+      },
+      {
+        id: "bybit",
+        enabled: false,
+      },
+    ]);
+
+    expect(configs).not.toBe(
+      getDefaultExchangeConfigs(),
+    );
+  });
+
+  it("does not share credential objects", async () => {
+    const {
+      cloneExchangeConfig,
+    } = await import(
+      "../../src/server/exchanges/core/config"
+    );
+
+    const source = {
+      id: "bybit" as const,
+      enabled: true,
+      credentials: {
+        apiKey: "key",
+        apiSecret: "secret",
+        passphrase: "pass",
+      },
+    };
+
+    const copy = cloneExchangeConfig(source);
+
+    expect(copy).toEqual(source);
+    expect(copy).not.toBe(source);
+    expect(copy.credentials).not.toBe(
+      source.credentials,
+    );
+  });
+});

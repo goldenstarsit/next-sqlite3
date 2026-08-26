@@ -54,3 +54,23 @@ export function getDefaultExchangeConfig(
     ...config,
   };
 }
+
+
+export function cloneExchangeConfig(
+  config: ExchangeConfig,
+): ExchangeConfig {
+  return {
+    ...config,
+    credentials: config.credentials
+      ? {
+          ...config.credentials,
+        }
+      : undefined,
+  };
+}
+
+export function getDefaultExchangeConfigs(): ExchangeConfig[] {
+  return DEFAULT_EXCHANGE_CONFIGS.map(
+    cloneExchangeConfig,
+  );
+}

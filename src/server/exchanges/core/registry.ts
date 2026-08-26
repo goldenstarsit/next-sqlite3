@@ -1,5 +1,6 @@
 import type {
   Exchange,
+  ExchangeConfig,
   ExchangeCredentials,
 } from "./types";
 
@@ -17,6 +18,27 @@ export const SUPPORTED_EXCHANGES: readonly ExchangeId[] = [
   "mexc",
   "bybit",
 ];
+
+export function createExchangeFromConfig(
+  config: ExchangeConfig,
+): Exchange {
+  if (!config.enabled) {
+    throw new Error(
+      `Exchange is disabled: ${config.id}`,
+    );
+  }
+
+  if (!isExchangeId(config.id)) {
+    throw new Error(
+      `Unsupported exchange: ${config.id}`,
+    );
+  }
+
+  return createExchange(
+    config.id,
+    config.credentials,
+  );
+}
 
 export function isExchangeId(
   value: string,

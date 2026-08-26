@@ -1,36 +1,49 @@
-import type { StrategyContext } from "./types";
-import { StrategyRegistry } from "./StrategyRegistry";
+import type {
+  StrategyContext,
+} from "./types";
+
+import {
+  StrategyRegistry,
+} from "./StrategyRegistry";
 
 export class StrategyManager {
   constructor(
     private readonly registry: StrategyRegistry,
   ) {}
 
-  async start(
+  calculateOrders(
     strategyId: string,
-  ): Promise<void> {
-    const strategy =
-      this.registry.get(strategyId);
-
-    const context: StrategyContext = {
-      now: new Date(),
-    };
-
-    await strategy.start(context);
+    context: StrategyContext,
+  ) {
+    return this.registry
+      .get(strategyId)
+      .calculateOrders(context);
   }
 
-  async stop(
+  getConfig(strategyId: string) {
+    return this.registry
+      .get(strategyId)
+      .getConfig();
+  }
+
+  updateConfig(
     strategyId: string,
-  ): Promise<void> {
+    config: unknown,
+  ): void {
     const strategy =
       this.registry.get(strategyId);
 
-    await strategy.stop();
+    strategy.updateConfig(config);
   }
 
   getStatus(strategyId: string) {
-    return this.registry
-      .get(strategyId)
-      .getStatus();
+    const strategy =
+      this.registry.get(strategyId);
+
+    return {
+      id: strategy.id,
+      name: strategy.name,
+      config: strategy.getConfig(),
+    };
   }
 }
