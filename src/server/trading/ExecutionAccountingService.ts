@@ -2,13 +2,18 @@ import type {
   ExchangeOrder,
 } from "../exchanges/core/types";
 
-import {
-  TradePersistenceService,
-} from "./services/TradePersistenceService";
+import type {
+  Database,
+  DatabaseExecutor,
+} from "../database/core/types";
 
 import {
-  PositionService,
-} from "./services/PositionService";
+  TradeRepository,
+} from "../database/repositories/TradeRepository";
+
+import {
+  PositionRepository,
+} from "../database/repositories/PositionRepository";
 
 export interface ExecutionAccountingResult {
   order: ExchangeOrder;
@@ -27,8 +32,8 @@ export interface ExecutionAccountingResult {
 
 export class ExecutionAccountingService {
   constructor(
-    private readonly tradePersistence: TradePersistenceService,
-    private readonly positionService: PositionService,
+    private readonly db: Database,
+    private readonly exchangeId: string,
   ) {}
 
   process(
@@ -54,8 +59,36 @@ export class ExecutionAccountingService {
       };
     }
 
+    if (
+      !Number.isFinite(order.price) ||
+      order.price <= 0
+    ) {
+      throw new Error(
+        `Cannot account execution ${order.orderId}: invalid execution price ${order.price}`,
+      );
+    }
+
+    return this.db.transaction((tx) => {
+      return this.processTransaction(
+        tx,
+        order,
+      );
+    });
+  }
+
+  private processTransaction(
+    db: DatabaseExecutor,
+    order: ExchangeOrder,
+  ): ExecutionAccountingResult {
+    const tradeRepository =
+      new TradeRepository(db);
+
+    const positionRepository =
+      new PositionRepository(db);
+
     const previousTrades =
-      this.tradePersistence.findByOrderId(
+      tradeRepository.findByOrderId(
+        this.exchangeId,
         order.orderId,
       );
 
@@ -71,30 +104,25 @@ export class ExecutionAccountingService {
       previouslyRecordedQuantity;
 
     if (newQuantity <= 1e-12) {
+      const position =
+        positionRepository.findOpen(
+          this.exchangeId,
+          order.symbol,
+        );
+
       return {
         order,
         tradeId: previousTrades[0]?.id,
-        positionId:
-          this.positionService
-            .getOpen(order.symbol)
-            ?.id,
+        positionId: position?.id,
         action: "TRADE_RECORDED",
       };
-    }
-
-    if (
-      !Number.isFinite(order.price) ||
-      order.price <= 0
-    ) {
-      throw new Error(
-        `Cannot account execution ${order.orderId}: invalid execution price ${order.price}`,
-      );
     }
 
     const price = order.price;
 
     const tradeId =
-      this.tradePersistence.persist({
+      tradeRepository.create({
+        exchange: this.exchangeId,
         symbol: order.symbol,
         orderId: order.orderId,
         side: order.side,
@@ -108,12 +136,13 @@ export class ExecutionAccountingService {
 
     if (order.side === "BUY") {
       const existingPosition =
-        this.positionService.getOpen(
+        positionRepository.findOpen(
+          this.exchangeId,
           order.symbol,
         );
 
       if (existingPosition) {
-        this.positionService.increaseQuantity(
+        positionRepository.increaseQuantity(
           existingPosition.id,
           newQuantity,
           price,
@@ -129,12 +158,13 @@ export class ExecutionAccountingService {
       }
 
       const positionId =
-        this.positionService.open(
-          order.symbol,
-          "LONG",
-          newQuantity,
-          price,
-        );
+        positionRepository.create({
+          exchange: this.exchangeId,
+          symbol: order.symbol,
+          side: "LONG",
+          quantity: newQuantity,
+          entryPrice: price,
+        });
 
       return {
         order,
@@ -146,7 +176,8 @@ export class ExecutionAccountingService {
     }
 
     const position =
-      this.positionService.getOpen(
+      positionRepository.findOpen(
+        this.exchangeId,
         order.symbol,
       );
 
@@ -173,7 +204,7 @@ export class ExecutionAccountingService {
       closeQuantity >=
       position.quantity - 1e-12
     ) {
-      this.positionService.close(
+      positionRepository.close(
         position.id,
         position.realized_pnl +
           realizedPnl,
@@ -189,7 +220,7 @@ export class ExecutionAccountingService {
       };
     }
 
-    this.positionService.reduceQuantity(
+    positionRepository.reduceQuantity(
       position.id,
       closeQuantity,
       realizedPnl,

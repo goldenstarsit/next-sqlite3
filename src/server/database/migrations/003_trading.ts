@@ -77,14 +77,19 @@ export const tradingMigration: Migration = {
         status TEXT NOT NULL DEFAULT 'OPEN',
         opened_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         closed_at TEXT,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(exchange, symbol, status)
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
     db.execute(`
       CREATE INDEX IF NOT EXISTS idx_positions_status
       ON positions(status)
+    `);
+
+    db.execute(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_positions_one_open
+      ON positions(exchange, symbol)
+      WHERE status = 'OPEN'
     `);
 
     db.execute(`

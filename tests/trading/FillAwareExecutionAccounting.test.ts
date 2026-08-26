@@ -1,7 +1,31 @@
-import { describe, expect, it } from "vitest";
+import {
+  afterEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
+
+import {
+  SQLiteDatabase,
+} from "../../src/server/database/adapters/sqlite/SQLiteDatabase";
+
+import {
+  runMigrations,
+} from "../../src/server/database/migrations/runner";
+
+import {
+  initialMigration,
+} from "../../src/server/database/migrations/001_initial";
+
+import {
+  exchangeConfigsMigration,
+} from "../../src/server/database/migrations/002_exchange_configs";
+
+import {
+  tradingMigration,
+} from "../../src/server/database/migrations/003_trading";
 
 import type {
-  Exchange,
   ExchangeOrder,
 } from "../../src/server/exchanges/core/types";
 
@@ -9,57 +33,16 @@ import {
   ExecutionAccountingService,
 } from "../../src/server/trading/ExecutionAccountingService";
 
-import {
-  TradePersistenceService,
-} from "../../src/server/trading/services/TradePersistenceService";
+function createDatabase() {
+  const db = new SQLiteDatabase(":memory:");
 
-import {
-  PositionService,
-} from "../../src/server/trading/services/PositionService";
+  runMigrations(db, [
+    initialMigration,
+    exchangeConfigsMigration,
+    tradingMigration,
+  ]);
 
-function exchange(): Exchange {
-  return {
-    id: "test",
-    name: "Test",
-
-    async ping() {
-      return true;
-    },
-
-    async getServerTime() {
-      return Date.now();
-    },
-
-    async getSymbol() {
-      throw new Error();
-    },
-
-    async getBalances() {
-      return [];
-    },
-
-    async getBalance() {
-      return undefined;
-    },
-
-    async getPrice() {
-      return 100;
-    },
-
-    async createOrder() {
-      throw new Error();
-    },
-
-    async getOrder() {
-      throw new Error();
-    },
-
-    async cancelOrder() {
-      throw new Error();
-    },
-
-    close() {},
-  };
+  return db;
 }
 
 function order(
@@ -79,165 +62,24 @@ function order(
   };
 }
 
-function repositories() {
-  const trades: any[] = [];
-  const positions: any[] = [];
-
-  const tradeRepository = {
-    findByOrderId(exchange: string, orderId: string) {
-      return trades.filter(
-        (x) =>
-          x.exchange === exchange &&
-          x.order_id === orderId,
-      );
-    },
-
-    create(input: any) {
-      const item = {
-        id: trades.length + 1,
-        exchange: input.exchange,
-        symbol: input.symbol,
-        order_id: input.orderId,
-        side: input.side,
-        quantity: input.quantity,
-        price: input.price,
-        quote_quantity: input.quoteQuantity,
-        fee: input.fee ?? 0,
-        fee_asset: input.feeAsset,
-        realized_pnl: input.realizedPnl,
-        executed_at: input.executedAt,
-      };
-
-      trades.push(item);
-
-      return item.id;
-    },
-
-    findBySymbol() {
-      return trades;
-    },
-
-    findAll() {
-      return trades;
-    },
-  } as any;
-
-  const positionRepository = {
-    create(input: any) {
-      const item = {
-        id: positions.length + 1,
-        exchange: input.exchange,
-        symbol: input.symbol,
-        side: input.side,
-        quantity: input.quantity,
-        entry_price: input.entryPrice,
-        current_price: undefined,
-        realized_pnl: 0,
-        unrealized_pnl: 0,
-        status: "OPEN",
-      };
-
-      positions.push(item);
-
-      return item.id;
-    },
-
-    findOpen(exchange: string, symbol: string) {
-      return positions.find(
-        (x) =>
-          x.exchange === exchange &&
-          x.symbol === symbol &&
-          x.status === "OPEN",
-      );
-    },
-
-    findAllOpen() {
-      return positions.filter(
-        (x) => x.status === "OPEN",
-      );
-    },
-
-    increaseQuantity(
-      id: number,
-      quantity: number,
-      price: number,
-    ) {
-      const p = positions.find(
-        (x) => x.id === id,
-      );
-
-      const total =
-        p.quantity + quantity;
-
-      p.entry_price =
-        (
-          p.quantity * p.entry_price +
-          quantity * price
-        ) / total;
-
-      p.quantity = total;
-    },
-
-    reduceQuantity(
-      id: number,
-      quantity: number,
-      realizedPnl: number,
-    ) {
-      const p = positions.find(
-        (x) => x.id === id,
-      );
-
-      p.quantity -= quantity;
-      p.realized_pnl += realizedPnl;
-    },
-
-    updateMarketValue() {},
-
-    close(
-      id: number,
-      realizedPnl: number,
-    ) {
-      const p = positions.find(
-        (x) => x.id === id,
-      );
-
-      p.status = "CLOSED";
-      p.quantity = 0;
-      p.realized_pnl = realizedPnl;
-    },
-
-    findAll() {
-      return positions;
-    },
-  } as any;
-
-  return {
-    trades,
-    positions,
-    tradeRepository,
-    positionRepository,
-  };
-}
-
 describe(
   "Fill-aware execution accounting",
   () => {
+    let db: SQLiteDatabase;
+
+    afterEach(() => {
+      db?.close();
+    });
+
     it(
       "records only the newly executed quantity",
       () => {
-        const r = repositories();
-        const e = exchange();
+        db = createDatabase();
 
         const service =
           new ExecutionAccountingService(
-            new TradePersistenceService(
-              e,
-              r.tradeRepository,
-            ),
-            new PositionService(
-              e,
-              r.positionRepository,
-            ),
+            db,
+            "test",
           );
 
         const first =
@@ -260,16 +102,37 @@ describe(
         expect(second.executedQuantity)
           .toBe(0.5);
 
-        expect(r.trades)
+        const trades =
+          db.all<any>(
+            `
+              SELECT *
+              FROM trades
+              ORDER BY id ASC
+            `,
+          );
+
+        const position =
+          db.get<any>(
+            `
+              SELECT *
+              FROM positions
+              WHERE exchange = ?
+                AND symbol = ?
+                AND status = 'OPEN'
+            `,
+            ["test", "BTCUSDT"],
+          );
+
+        expect(trades)
           .toHaveLength(2);
 
-        expect(r.trades[0].quantity)
+        expect(trades[0].quantity)
           .toBe(1);
 
-        expect(r.trades[1].quantity)
+        expect(trades[1].quantity)
           .toBe(0.5);
 
-        expect(r.positions[0].quantity)
+        expect(position.quantity)
           .toBe(1.5);
       },
     );
@@ -277,19 +140,12 @@ describe(
     it(
       "does not process the same cumulative execution twice",
       () => {
-        const r = repositories();
-        const e = exchange();
+        db = createDatabase();
 
         const service =
           new ExecutionAccountingService(
-            new TradePersistenceService(
-              e,
-              r.tradeRepository,
-            ),
-            new PositionService(
-              e,
-              r.positionRepository,
-            ),
+            db,
+            "test",
           );
 
         const o =
@@ -298,16 +154,32 @@ describe(
           });
 
         service.process(o);
+
         const second =
           service.process(o);
 
         expect(second.action)
           .toBe("TRADE_RECORDED");
 
-        expect(r.trades)
-          .toHaveLength(1);
+        expect(
+          db.all(
+            `SELECT * FROM trades`,
+          ),
+        ).toHaveLength(1);
 
-        expect(r.positions[0].quantity)
+        const position =
+          db.get<any>(
+            `
+              SELECT *
+              FROM positions
+              WHERE exchange = ?
+                AND symbol = ?
+                AND status = 'OPEN'
+            `,
+            ["test", "BTCUSDT"],
+          );
+
+        expect(position.quantity)
           .toBe(1);
       },
     );
@@ -315,19 +187,12 @@ describe(
     it(
       "reduces a position on partial SELL",
       () => {
-        const r = repositories();
-        const e = exchange();
+        db = createDatabase();
 
         const service =
           new ExecutionAccountingService(
-            new TradePersistenceService(
-              e,
-              r.tradeRepository,
-            ),
-            new PositionService(
-              e,
-              r.positionRepository,
-            ),
+            db,
+            "test",
           );
 
         service.process(
@@ -357,30 +222,35 @@ describe(
         expect(result.realizedPnl)
           .toBe(5);
 
-        expect(r.positions[0].quantity)
+        const position =
+          db.get<any>(
+            `
+              SELECT *
+              FROM positions
+              WHERE id = 1
+            `,
+          );
+
+        expect(position.quantity)
           .toBe(1.5);
 
-        expect(r.positions[0].status)
+        expect(position.status)
           .toBe("OPEN");
+
+        expect(position.realized_pnl)
+          .toBe(5);
       },
     );
 
     it(
       "closes the remaining position on final SELL",
       () => {
-        const r = repositories();
-        const e = exchange();
+        db = createDatabase();
 
         const service =
           new ExecutionAccountingService(
-            new TradePersistenceService(
-              e,
-              r.tradeRepository,
-            ),
-            new PositionService(
-              e,
-              r.positionRepository,
-            ),
+            db,
+            "test",
           );
 
         service.process(
@@ -417,13 +287,25 @@ describe(
         expect(result.action)
           .toBe("POSITION_CLOSED");
 
-        expect(r.positions[0].status)
+        expect(result.executedQuantity)
+          .toBe(1);
+
+        const position =
+          db.get<any>(
+            `
+              SELECT *
+              FROM positions
+              WHERE id = 1
+            `,
+          );
+
+        expect(position.status)
           .toBe("CLOSED");
 
-        expect(r.positions[0].quantity)
+        expect(position.quantity)
           .toBe(0);
 
-        expect(r.positions[0].realized_pnl)
+        expect(position.realized_pnl)
           .toBe(20);
       },
     );

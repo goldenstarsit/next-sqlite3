@@ -90,8 +90,8 @@ export class TradingServices {
 
     this.accounting =
       new ExecutionAccountingService(
-        this.tradePersistence,
-        this.position,
+        db,
+        exchange.id,
       );
 
     this.reconciliation =

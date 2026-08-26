@@ -1,4 +1,4 @@
-import type { Database } from "../core/types";
+import type { DatabaseExecutor } from "../core/types";
 
 export interface StoredTrade {
   id: number;
@@ -32,7 +32,7 @@ export interface CreateTradeInput {
 
 export class TradeRepository {
   constructor(
-    private readonly db: Database,
+    private readonly db: DatabaseExecutor,
   ) {}
 
   create(

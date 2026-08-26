@@ -1,4 +1,4 @@
-import type { Database } from "../core/types";
+import type { DatabaseExecutor } from "../core/types";
 
 export type PositionStatus = "OPEN" | "CLOSED";
 
@@ -28,7 +28,7 @@ export interface CreatePositionInput {
 
 export class PositionRepository {
   constructor(
-    private readonly db: Database,
+    private readonly db: DatabaseExecutor,
   ) {}
 
   create(
@@ -236,7 +236,7 @@ export class PositionRepository {
       [
         currentPrice,
         unrealizedPnl,
-        id,
+      id,
       ],
     );
   }
@@ -250,6 +250,7 @@ export class PositionRepository {
         UPDATE positions
         SET
           status = 'CLOSED',
+          quantity = 0,
           realized_pnl = ?,
           closed_at = CURRENT_TIMESTAMP,
           updated_at = CURRENT_TIMESTAMP

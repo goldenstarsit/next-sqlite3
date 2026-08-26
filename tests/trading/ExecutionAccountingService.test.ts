@@ -1,7 +1,31 @@
-import { describe, expect, it } from "vitest";
+import {
+  afterEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
+
+import {
+  SQLiteDatabase,
+} from "../../src/server/database/adapters/sqlite/SQLiteDatabase";
+
+import {
+  runMigrations,
+} from "../../src/server/database/migrations/runner";
+
+import {
+  initialMigration,
+} from "../../src/server/database/migrations/001_initial";
+
+import {
+  exchangeConfigsMigration,
+} from "../../src/server/database/migrations/002_exchange_configs";
+
+import {
+  tradingMigration,
+} from "../../src/server/database/migrations/003_trading";
 
 import type {
-  Exchange,
   ExchangeOrder,
 } from "../../src/server/exchanges/core/types";
 
@@ -9,57 +33,16 @@ import {
   ExecutionAccountingService,
 } from "../../src/server/trading/ExecutionAccountingService";
 
-import {
-  TradePersistenceService,
-} from "../../src/server/trading/services/TradePersistenceService";
+function createDatabase() {
+  const db = new SQLiteDatabase(":memory:");
 
-import {
-  PositionService,
-} from "../../src/server/trading/services/PositionService";
+  runMigrations(db, [
+    initialMigration,
+    exchangeConfigsMigration,
+    tradingMigration,
+  ]);
 
-function createExchange(): Exchange {
-  return {
-    id: "test",
-    name: "Test Exchange",
-
-    async ping() {
-      return true;
-    },
-
-    async getServerTime() {
-      return Date.now();
-    },
-
-    async getSymbol() {
-      throw new Error("not implemented");
-    },
-
-    async getBalances() {
-      return [];
-    },
-
-    async getBalance() {
-      return undefined;
-    },
-
-    async getPrice() {
-      return 100;
-    },
-
-    async createOrder() {
-      throw new Error("not implemented");
-    },
-
-    async getOrder() {
-      throw new Error("not implemented");
-    },
-
-    async cancelOrder() {
-      throw new Error("not implemented");
-    },
-
-    close() {},
-  };
+  return db;
 }
 
 function createOrder(
@@ -79,137 +62,24 @@ function createOrder(
   };
 }
 
-function createRepositories() {
-  const trades: any[] = [];
-  const positions: any[] = [];
-
-  const tradeRepository = {
-    findByOrderId(exchange: string, orderId: string) {
-      return trades.filter(
-        (trade) =>
-          trade.exchange === exchange &&
-          trade.order_id === orderId,
-      );
-    },
-
-    create(input: any) {
-      const trade = {
-        id: trades.length + 1,
-        exchange: input.exchange,
-        symbol: input.symbol,
-        order_id: input.orderId,
-        side: input.side,
-        quantity: input.quantity,
-        price: input.price,
-        quote_quantity: input.quoteQuantity,
-        fee: input.fee ?? 0,
-        fee_asset: input.feeAsset,
-        realized_pnl: input.realizedPnl,
-        executed_at: input.executedAt,
-      };
-
-      trades.push(trade);
-
-      return trade.id;
-    },
-
-    findBySymbol() {
-      return trades;
-    },
-
-    findAll() {
-      return trades;
-    },
-  } as any;
-
-  const positionRepository = {
-    create(input: any) {
-      const position = {
-        id: positions.length + 1,
-        exchange: input.exchange,
-        symbol: input.symbol,
-        side: input.side,
-        quantity: input.quantity,
-        entry_price: input.entryPrice,
-        current_price: undefined,
-        realized_pnl: 0,
-        unrealized_pnl: 0,
-        status: "OPEN",
-      };
-
-      positions.push(position);
-
-      return position.id;
-    },
-
-    findOpen(exchange: string, symbol: string) {
-      return positions.find(
-        (position) =>
-          position.exchange === exchange &&
-          position.symbol === symbol &&
-          position.status === "OPEN",
-      );
-    },
-
-    findAllOpen() {
-      return positions.filter(
-        (position) => position.status === "OPEN",
-      );
-    },
-
-    updateMarketValue() {},
-
-    close(id: number, realizedPnl: number) {
-      const position = positions.find(
-        (position) => position.id === id,
-      );
-
-      if (!position) {
-        throw new Error("Position not found");
-      }
-
-      position.status = "CLOSED";
-      position.realized_pnl = realizedPnl;
-    },
-
-    findAll() {
-      return positions;
-    },
-  } as any;
-
-  return {
-    trades,
-    positions,
-    tradeRepository,
-    positionRepository,
-  };
-}
-
 describe(
   "ExecutionAccountingService",
   () => {
+    let db: SQLiteDatabase;
+
+    afterEach(() => {
+      db?.close();
+    });
+
     it(
       "records a filled BUY and opens a position",
       () => {
-        const exchange = createExchange();
-        const repositories = createRepositories();
-
-        const tradePersistence =
-          new TradePersistenceService(
-            exchange,
-            repositories.tradeRepository,
-          );
-
-        const positionService =
-          new PositionService(
-            exchange,
-            repositories.positionRepository,
-          );
+        db = createDatabase();
 
         const service =
           new ExecutionAccountingService(
-            tradePersistence,
-            positionService,
+            db,
+            "test",
           );
 
         const result =
@@ -226,42 +96,47 @@ describe(
         expect(result.positionId)
           .toBe(1);
 
-        expect(
-          repositories.trades,
-        ).toHaveLength(1);
+        const trades =
+          db.all<any>(
+            `
+              SELECT *
+              FROM trades
+            `,
+          );
+
+        const positions =
+          db.all<any>(
+            `
+              SELECT *
+              FROM positions
+            `,
+          );
+
+        expect(trades)
+          .toHaveLength(1);
+
+        expect(positions)
+          .toHaveLength(1);
 
         expect(
-          repositories.positions,
-        ).toHaveLength(1);
-
-        expect(
-          repositories.positions[0].entry_price,
+          positions[0].entry_price,
         ).toBe(100);
+
+        expect(
+          positions[0].quantity,
+        ).toBe(1);
       },
     );
 
     it(
       "does not duplicate an already persisted order",
       () => {
-        const exchange = createExchange();
-        const repositories = createRepositories();
-
-        const tradePersistence =
-          new TradePersistenceService(
-            exchange,
-            repositories.tradeRepository,
-          );
-
-        const positionService =
-          new PositionService(
-            exchange,
-            repositories.positionRepository,
-          );
+        db = createDatabase();
 
         const service =
           new ExecutionAccountingService(
-            tradePersistence,
-            positionService,
+            db,
+            "test",
           );
 
         const order =
@@ -279,32 +154,39 @@ describe(
         expect(second.action)
           .toBe("TRADE_RECORDED");
 
-        expect(
-          repositories.trades,
-        ).toHaveLength(1);
+        const trades =
+          db.all<any>(
+            `
+              SELECT *
+              FROM trades
+            `,
+          );
 
-        expect(
-          repositories.positions,
-        ).toHaveLength(1);
+        const positions =
+          db.all<any>(
+            `
+              SELECT *
+              FROM positions
+            `,
+          );
+
+        expect(trades)
+          .toHaveLength(1);
+
+        expect(positions)
+          .toHaveLength(1);
       },
     );
 
     it(
       "ignores orders without execution",
       () => {
-        const exchange = createExchange();
-        const repositories = createRepositories();
+        db = createDatabase();
 
         const service =
           new ExecutionAccountingService(
-            new TradePersistenceService(
-              exchange,
-              repositories.tradeRepository,
-            ),
-            new PositionService(
-              exchange,
-              repositories.positionRepository,
-            ),
+            db,
+            "test",
           );
 
         const result =
@@ -319,11 +201,15 @@ describe(
           .toBe("IGNORED");
 
         expect(
-          repositories.trades,
+          db.all(
+            `SELECT * FROM trades`,
+          ),
         ).toHaveLength(0);
 
         expect(
-          repositories.positions,
+          db.all(
+            `SELECT * FROM positions`,
+          ),
         ).toHaveLength(0);
       },
     );
@@ -331,19 +217,12 @@ describe(
     it(
       "closes a position on a filled SELL and calculates realized PnL",
       () => {
-        const exchange = createExchange();
-        const repositories = createRepositories();
+        db = createDatabase();
 
         const service =
           new ExecutionAccountingService(
-            new TradePersistenceService(
-              exchange,
-              repositories.tradeRepository,
-            ),
-            new PositionService(
-              exchange,
-              repositories.positionRepository,
-            ),
+            db,
+            "test",
           );
 
         service.process(
@@ -369,32 +248,32 @@ describe(
         expect(result.realizedPnl)
           .toBe(10);
 
-        expect(
-          repositories.positions[0].status,
-        ).toBe("CLOSED");
+        const position =
+          db.get<any>(
+            `
+              SELECT *
+              FROM positions
+              WHERE id = 1
+            `,
+          );
 
-        expect(
-          repositories.positions[0].realized_pnl,
-        ).toBe(10);
+        expect(position.status)
+          .toBe("CLOSED");
+
+        expect(position.realized_pnl)
+          .toBe(10);
       },
     );
 
     it(
-      "ignores a SELL when there is no open position",
+      "records a SELL when there is no open position",
       () => {
-        const exchange = createExchange();
-        const repositories = createRepositories();
+        db = createDatabase();
 
         const service =
           new ExecutionAccountingService(
-            new TradePersistenceService(
-              exchange,
-              repositories.tradeRepository,
-            ),
-            new PositionService(
-              exchange,
-              repositories.positionRepository,
-            ),
+            db,
+            "test",
           );
 
         const result =
@@ -410,11 +289,15 @@ describe(
           .toBe("TRADE_RECORDED");
 
         expect(
-          repositories.trades,
+          db.all(
+            `SELECT * FROM trades`,
+          ),
         ).toHaveLength(1);
 
         expect(
-          repositories.positions,
+          db.all(
+            `SELECT * FROM positions`,
+          ),
         ).toHaveLength(0);
       },
     );
