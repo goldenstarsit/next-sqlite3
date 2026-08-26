@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+import { normalizeOrderStatus } from "../core/types";
 import type {
   Exchange,
   ExchangeBalance,
@@ -321,7 +322,7 @@ export class BinanceExchange implements Exchange {
         order.origClientOrderId,
       side: order.side,
       type: order.type as ExchangeOrder["type"],
-      status: order.status,
+      status: normalizeOrderStatus(order.status),
       price: Number(order.price),
       originalQuantity: Number(order.origQty),
       executedQuantity: Number(order.executedQty),

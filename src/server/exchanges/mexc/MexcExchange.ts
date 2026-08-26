@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 
+import { normalizeOrderStatus } from "../core/types";
 import type {
   Exchange,
   ExchangeBalance,
@@ -311,7 +312,7 @@ export class MexcExchange implements Exchange {
         order.clientOrderId ?? order.origClientOrderId,
       side: order.side,
       type: order.type as ExchangeOrder["type"],
-      status: order.status,
+      status: normalizeOrderStatus(order.status),
       price: Number(order.price),
       originalQuantity: Number(order.origQty ?? 0),
       executedQuantity: Number(order.executedQty ?? 0),

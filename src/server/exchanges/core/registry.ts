@@ -5,10 +5,12 @@ import type {
 
 import { createMexcExchange } from "../mexc";
 import { createBinanceExchange } from "../binance";
+import { createBybitExchange } from "../bybit";
 
 export type ExchangeId =
   | "binance"
-  | "mexc";
+  | "mexc"
+  | "bybit";
 
 export function createExchange(
   id: ExchangeId,
@@ -20,6 +22,9 @@ export function createExchange(
 
     case "mexc":
       return createMexcExchange(credentials);
+
+    case "bybit":
+      return createBybitExchange(credentials);
 
     default:
       throw new Error(

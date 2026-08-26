@@ -5,6 +5,46 @@ export type ExchangeOrderType =
   | "LIMIT"
   | "LIMIT_MAKER";
 
+export type ExchangeOrderStatus =
+  | "NEW"
+  | "PARTIALLY_FILLED"
+  | "FILLED"
+  | "CANCELED"
+  | "REJECTED"
+  | "EXPIRED"
+  | "UNKNOWN";
+
+export function normalizeOrderStatus(
+  status: string,
+): ExchangeOrderStatus {
+  switch (status.toUpperCase()) {
+    case "NEW":
+    case "OPEN":
+    case "CREATED":
+      return "NEW";
+
+    case "PARTIALLY_FILLED":
+    case "PARTIALLYFILLED":
+      return "PARTIALLY_FILLED";
+
+    case "FILLED":
+      return "FILLED";
+
+    case "CANCELED":
+    case "CANCELLED":
+      return "CANCELED";
+
+    case "REJECTED":
+      return "REJECTED";
+
+    case "EXPIRED":
+      return "EXPIRED";
+
+    default:
+      return "UNKNOWN";
+  }
+}
+
 export interface ExchangeCredentials {
   apiKey: string;
   apiSecret: string;
@@ -53,7 +93,7 @@ export interface ExchangeOrder {
   clientOrderId?: string;
   side: ExchangeOrderSide;
   type: ExchangeOrderType;
-  status: string;
+  status: ExchangeOrderStatus;
   price: number;
   originalQuantity: number;
   executedQuantity: number;
