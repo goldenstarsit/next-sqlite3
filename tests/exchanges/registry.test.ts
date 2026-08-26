@@ -8,6 +8,7 @@ import {
 
 import {
   createExchange,
+  createExchangeFromConfig,
   isExchangeId,
   SUPPORTED_EXCHANGES,
   type ExchangeId,
@@ -152,5 +153,40 @@ describe("Exchange configuration", () => {
     expect(isExchangeId("mexc")).toBe(true);
     expect(isExchangeId("bybit")).toBe(true);
     expect(isExchangeId("unknown")).toBe(false);
+  });
+});
+
+
+describe("Exchange config factory", () => {
+  it("creates an enabled exchange from config", () => {
+    const exchange = createExchangeFromConfig({
+      id: "bybit",
+      enabled: true,
+      credentials: {
+        apiKey: "key",
+        apiSecret: "secret",
+      },
+    });
+
+    expect(exchange.id).toBe("bybit");
+    exchange.close();
+  });
+
+  it("rejects a disabled exchange", () => {
+    expect(() =>
+      createExchangeFromConfig({
+        id: "bybit",
+        enabled: false,
+      }),
+    ).toThrow("Exchange is disabled: bybit");
+  });
+
+  it("rejects an unsupported exchange", () => {
+    expect(() =>
+      createExchangeFromConfig({
+        id: "kraken" as never,
+        enabled: true,
+      }),
+    ).toThrow("Unsupported exchange: kraken");
   });
 });

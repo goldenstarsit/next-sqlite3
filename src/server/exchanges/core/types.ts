@@ -48,6 +48,13 @@ export function normalizeOrderStatus(
 export interface ExchangeCredentials {
   apiKey: string;
   apiSecret: string;
+  passphrase?: string;
+}
+
+export interface ExchangeConfig {
+  id: "binance" | "mexc" | "bybit";
+  enabled: boolean;
+  credentials?: ExchangeCredentials;
 }
 
 export interface SymbolFilter {
