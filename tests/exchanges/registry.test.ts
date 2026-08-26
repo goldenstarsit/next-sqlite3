@@ -229,3 +229,72 @@ describe("Default exchange configuration", () => {
     });
   });
 });
+
+
+describe("Exchange config validation", () => {
+  it("accepts a disabled exchange without credentials", async () => {
+    const {
+      validateExchangeConfig,
+    } = await import(
+      "../../src/server/exchanges/core/config"
+    );
+
+    expect(() =>
+      validateExchangeConfig({
+        id: "binance",
+        enabled: false,
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects an enabled exchange without credentials", async () => {
+    const {
+      validateExchangeConfig,
+    } = await import(
+      "../../src/server/exchanges/core/config"
+    );
+
+    expect(() =>
+      validateExchangeConfig({
+        id: "binance",
+        enabled: true,
+      }),
+    ).toThrow(
+      "Credentials are required for enabled exchange: binance",
+    );
+  });
+
+  it("rejects incomplete credentials", async () => {
+    const {
+      validateExchangeConfig,
+    } = await import(
+      "../../src/server/exchanges/core/config"
+    );
+
+    expect(() =>
+      validateExchangeConfig({
+        id: "mexc",
+        enabled: true,
+        credentials: {
+          apiKey: "",
+          apiSecret: "secret",
+        },
+      }),
+    ).toThrow(
+      "API key is required for enabled exchange: mexc",
+    );
+
+    expect(() =>
+      validateExchangeConfig({
+        id: "bybit",
+        enabled: true,
+        credentials: {
+          apiKey: "key",
+          apiSecret: " ",
+        },
+      }),
+    ).toThrow(
+      "API secret is required for enabled exchange: bybit",
+    );
+  });
+});
