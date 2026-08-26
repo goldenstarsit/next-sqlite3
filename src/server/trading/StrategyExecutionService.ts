@@ -14,11 +14,13 @@ import {
 
 import {
   OrderService,
+  OrderPersistenceService,
 } from "./services";
 
 export interface StrategyExecutionResult {
   order: ExchangeOrder;
   request: ExchangeOrderRequest;
+  persistedOrderId?: number;
 }
 
 export class StrategyExecutionService {
@@ -26,6 +28,7 @@ export class StrategyExecutionService {
 
   constructor(
     private readonly orderService: OrderService,
+    private readonly orderPersistence?: OrderPersistenceService,
   ) {
     this.resolver =
       new StrategyOrderResolver(
@@ -48,9 +51,15 @@ export class StrategyExecutionService {
         resolved.request,
       );
 
+    const persistedOrderId =
+      this.orderPersistence
+        ? this.orderPersistence.save(order)
+        : undefined;
+
     return {
       request: resolved.request,
       order,
+      persistedOrderId,
     };
   }
 }
