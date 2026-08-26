@@ -4,6 +4,7 @@ import type {
 
 import {
   SUPPORTED_EXCHANGES,
+  type ExchangeId,
 } from "./registry";
 
 export const DEFAULT_EXCHANGE_CONFIGS: readonly ExchangeConfig[] =
@@ -13,7 +14,7 @@ export const DEFAULT_EXCHANGE_CONFIGS: readonly ExchangeConfig[] =
   }));
 
 export function getDefaultExchangeConfig(
-  id: ExchangeConfig["id"],
+  id: ExchangeId,
 ): ExchangeConfig {
   const config = DEFAULT_EXCHANGE_CONFIGS.find(
     (item) => item.id === id,

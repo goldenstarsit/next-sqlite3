@@ -213,5 +213,19 @@ describe("Default exchange configuration", () => {
       id: "binance",
       enabled: false,
     });
+
+    expect(
+      getDefaultExchangeConfig("mexc"),
+    ).toEqual({
+      id: "mexc",
+      enabled: false,
+    });
+
+    expect(
+      getDefaultExchangeConfig("bybit"),
+    ).toEqual({
+      id: "bybit",
+      enabled: false,
+    });
   });
 });
