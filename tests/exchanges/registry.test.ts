@@ -190,3 +190,28 @@ describe("Exchange config factory", () => {
     ).toThrow("Unsupported exchange: kraken");
   });
 });
+
+describe("Default exchange configuration", () => {
+  it("provides disabled defaults for every supported exchange", async () => {
+    const {
+      DEFAULT_EXCHANGE_CONFIGS,
+      getDefaultExchangeConfig,
+    } = await import(
+      "../../src/server/exchanges/core/config"
+    );
+
+    expect(DEFAULT_EXCHANGE_CONFIGS).toHaveLength(3);
+    expect(
+      DEFAULT_EXCHANGE_CONFIGS.every(
+        (config) => config.enabled === false,
+      ),
+    ).toBe(true);
+
+    expect(
+      getDefaultExchangeConfig("binance"),
+    ).toEqual({
+      id: "binance",
+      enabled: false,
+    });
+  });
+});
