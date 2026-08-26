@@ -12,6 +12,20 @@ export type ExchangeId =
   | "mexc"
   | "bybit";
 
+export const SUPPORTED_EXCHANGES: readonly ExchangeId[] = [
+  "binance",
+  "mexc",
+  "bybit",
+];
+
+export function isExchangeId(
+  value: string,
+): value is ExchangeId {
+  return SUPPORTED_EXCHANGES.includes(
+    value as ExchangeId,
+  );
+}
+
 export function createExchange(
   id: ExchangeId,
   credentials?: ExchangeCredentials,

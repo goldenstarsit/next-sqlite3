@@ -8,6 +8,8 @@ import {
 
 import {
   createExchange,
+  isExchangeId,
+  SUPPORTED_EXCHANGES,
   type ExchangeId,
 } from "../../src/server/exchanges/core/registry";
 
@@ -132,5 +134,23 @@ describe("Exchange Registry", () => {
     ).toThrow(
       "Unsupported exchange: unsupported",
     );
+  });
+});
+
+
+describe("Exchange configuration", () => {
+  it("exposes all supported exchanges", () => {
+    expect(SUPPORTED_EXCHANGES).toEqual([
+      "binance",
+      "mexc",
+      "bybit",
+    ]);
+  });
+
+  it("validates exchange ids", () => {
+    expect(isExchangeId("binance")).toBe(true);
+    expect(isExchangeId("mexc")).toBe(true);
+    expect(isExchangeId("bybit")).toBe(true);
+    expect(isExchangeId("unknown")).toBe(false);
   });
 });
