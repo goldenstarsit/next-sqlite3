@@ -8,7 +8,7 @@ import type {
 } from "../strategies/core/types";
 
 import {
-  normalizeQuantity,
+  normalizeMarketQuantity,
 } from "../exchanges/core/OrderRules";
 
 export interface StrategyExecutionBalances {
@@ -116,16 +116,13 @@ export class StrategyOrderResolver {
     }
 
     const quantity =
-      symbol.filters.stepSize !== undefined &&
-      symbol.filters.stepSize > 0
-        ? normalizeQuantity(
-            requestedQuantity,
-            {
-              symbol: symbol.symbol,
-              filters: symbol.filters,
-            },
-          )
-        : requestedQuantity;
+      normalizeMarketQuantity(
+        requestedQuantity,
+        {
+          symbol: symbol.symbol,
+          filters: symbol.filters,
+        },
+      );
 
     if (quantity <= 0) {
       throw new Error(
