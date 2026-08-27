@@ -4,6 +4,7 @@ import { normalizeOrderStatus } from "../core/types";
 import { createBybitError } from "./BybitError";
 import { normalizeExchangeError } from "../core/ExchangeError";
 import { prepareOrder } from "../core/OrderRules";
+import { BybitMarketDataStream } from "./BybitMarketDataStream";
 
 import type {
   Exchange,
@@ -305,10 +306,8 @@ export class BybitExchange implements Exchange {
     return Number(ticker.lastPrice);
   }
 
-  createMarketDataStream(): import("../core/market-data").MarketDataStream {
-    throw new Error(
-      "Market data stream is not implemented yet.",
-    );
+  createMarketDataStream() {
+    return new BybitMarketDataStream();
   }
 
   async createOrder(
