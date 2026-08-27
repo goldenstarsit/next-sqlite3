@@ -8,17 +8,24 @@ export interface OrderRuleSet {
   filters: SymbolFilter;
 }
 
-function decimals(value: number): number {
-  const text = value.toString();
-
-  if (!text.includes(".")) {
+function decimalPlaces(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
     return 0;
   }
 
-  return text.split(".")[1]?.length ?? 0;
+  const text = value.toString();
+
+  if (text.includes("e-")) {
+    const [, exponent] = text.split("e-");
+    return Number(exponent) || 0;
+  }
+
+  return text.includes(".")
+    ? text.split(".")[1]?.length ?? 0
+    : 0;
 }
 
-export function normalizeStep(
+function floorToStep(
   value: number,
   step: number,
 ): number {
@@ -26,7 +33,8 @@ export function normalizeStep(
     return value;
   }
 
-  const precision = decimals(step);
+  const precision =
+    decimalPlaces(step) + 8;
 
   const normalized =
     Math.floor(
@@ -38,27 +46,79 @@ export function normalizeStep(
   );
 }
 
+function ceilToStep(
+  value: number,
+  step: number,
+): number {
+  if (step <= 0) {
+    return value;
+  }
+
+  const precision =
+    decimalPlaces(step) + 8;
+
+  const normalized =
+    Math.ceil(
+      (value - Number.EPSILON) / step,
+    ) * step;
+
+  return Number(
+    normalized.toFixed(precision),
+  );
+}
+
+function roundToTick(
+  value: number,
+  tick: number,
+): number {
+  if (tick <= 0) {
+    return value;
+  }
+
+  const precision =
+    decimalPlaces(tick) + 8;
+
+  const normalized =
+    Math.round(
+      (value + Number.EPSILON) / tick,
+    ) * tick;
+
+  return Number(
+    normalized.toFixed(precision),
+  );
+}
+
+export function normalizeStep(
+  value: number,
+  step: number,
+): number {
+  return floorToStep(value, step);
+}
+
 export function normalizePrice(
   price: number,
   rules: OrderRuleSet,
 ): number {
+  if (
+    !Number.isFinite(price) ||
+    price <= 0
+  ) {
+    throw new Error(
+      "Order price must be greater than zero.",
+    );
+  }
+
   const tickSize =
     rules.filters.tickSize ?? 0;
 
-  if (tickSize <= 0) {
-    return price;
-  }
-
-  const normalized =
-    normalizeStep(price, tickSize);
+  let result =
+    floorToStep(price, tickSize);
 
   const minPrice =
     rules.filters.minPrice;
 
   const maxPrice =
     rules.filters.maxPrice;
-
-  let result = normalized;
 
   if (
     minPrice !== undefined &&
@@ -81,18 +141,20 @@ export function normalizeQuantity(
   quantity: number,
   rules: OrderRuleSet,
 ): number {
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new Error(
+      "Order quantity must be greater than zero.",
+    );
+  }
+
   const stepSize =
     rules.filters.stepSize ?? 0;
 
-  if (stepSize <= 0) {
-    return quantity;
-  }
-
-  const normalized =
-    normalizeStep(
-      quantity,
-      stepSize,
-    );
+  let result =
+    floorToStep(quantity, stepSize);
 
   const minQty =
     rules.filters.minQty;
@@ -100,13 +162,11 @@ export function normalizeQuantity(
   const maxQty =
     rules.filters.maxQty;
 
-  let result = normalized;
-
   if (
     minQty !== undefined &&
     result < minQty
   ) {
-    result = minQty;
+    result = ceilToStep(minQty, stepSize);
   }
 
   if (
@@ -114,6 +174,66 @@ export function normalizeQuantity(
     result > maxQty
   ) {
     result = maxQty;
+  }
+
+  if (result <= 0) {
+    throw new Error(
+      "Order quantity becomes zero after step-size normalization.",
+    );
+  }
+
+  return result;
+}
+
+export function normalizeMarketQuantity(
+  quantity: number,
+  rules: OrderRuleSet,
+): number {
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new Error(
+      "Order quantity must be greater than zero.",
+    );
+  }
+
+  const filter = rules.filters;
+
+  const step =
+    filter.marketStepSize ??
+    filter.stepSize ??
+    0;
+
+  let result =
+    floorToStep(quantity, step);
+
+  const minQty =
+    filter.marketMinQty ??
+    filter.minQty;
+
+  const maxQty =
+    filter.marketMaxQty ??
+    filter.maxQty;
+
+  if (
+    minQty !== undefined &&
+    result < minQty
+  ) {
+    result = ceilToStep(minQty, step);
+  }
+
+  if (
+    maxQty !== undefined &&
+    result > maxQty
+  ) {
+    result = maxQty;
+  }
+
+  if (result <= 0) {
+    throw new Error(
+      "Order quantity becomes zero after market step-size normalization.",
+    );
   }
 
   return result;
@@ -132,42 +252,119 @@ export function calculateMinimumQuantity(
     );
   }
 
-  let quantity =
-    rules.filters.minQty ?? 0;
+  const filter = rules.filters;
 
-  const minNotional =
-    rules.filters.minNotional;
+  const step =
+    filter.stepSize ?? 0;
+
+  let quantity =
+    filter.minQty ?? 0;
 
   if (
-    minNotional !== undefined &&
-    minNotional > 0
+    filter.minNotional !== undefined &&
+    filter.minNotional > 0
   ) {
     quantity = Math.max(
       quantity,
-      minNotional / price,
+      filter.minNotional / price,
     );
   }
 
   quantity =
-    normalizeQuantity(
-      quantity,
-      rules,
-    );
+    ceilToStep(quantity, step);
 
   if (
-    minNotional !== undefined &&
-    quantity * price < minNotional
+    filter.minNotional !== undefined &&
+    quantity * price <
+      filter.minNotional
   ) {
-    const stepSize =
-      rules.filters.stepSize ?? 0;
+    quantity =
+      ceilToStep(
+        filter.minNotional / price,
+        step,
+      );
+  }
 
-    if (stepSize > 0) {
-      quantity =
-        normalizeQuantity(
-          quantity + stepSize,
-          rules,
-        );
-    }
+  if (
+    filter.maxQty !== undefined &&
+    quantity > filter.maxQty
+  ) {
+    throw new Error(
+      "Minimum order quantity exceeds exchange maximum quantity.",
+    );
+  }
+
+  return quantity;
+}
+
+export function calculateMinimumMarketQuantity(
+  price: number,
+  rules: OrderRuleSet,
+): number {
+  if (
+    !Number.isFinite(price) ||
+    price <= 0
+  ) {
+    throw new Error(
+      "Order price must be greater than zero.",
+    );
+  }
+
+  const filter = rules.filters;
+
+  const step =
+    filter.marketStepSize ??
+    filter.stepSize ??
+    0;
+
+  const minQty =
+    filter.marketMinQty ??
+    filter.minQty ??
+    0;
+
+  const minNotionalApplies =
+    filter.applyMinNotionalToMarket !== false;
+
+  let quantity = minQty;
+
+  if (
+    minNotionalApplies &&
+    filter.minNotional !== undefined &&
+    filter.minNotional > 0
+  ) {
+    quantity = Math.max(
+      quantity,
+      filter.minNotional / price,
+    );
+  }
+
+  quantity =
+    ceilToStep(quantity, step);
+
+  if (
+    minNotionalApplies &&
+    filter.minNotional !== undefined &&
+    quantity * price <
+      filter.minNotional
+  ) {
+    quantity =
+      ceilToStep(
+        filter.minNotional / price,
+        step,
+      );
+  }
+
+  const maxQty =
+    filter.marketMaxQty ??
+    filter.maxQty;
+
+  if (
+    maxQty !== undefined &&
+    quantity > maxQty
+  ) {
+    throw new Error(
+      "Minimum market order quantity exceeds exchange maximum quantity.",
+    );
   }
 
   return quantity;
@@ -185,12 +382,13 @@ export function calculateMinimumOrderAmount(
   );
 }
 
-
 export function validateOrderRequest(
   request: ExchangeOrderRequest,
 ): void {
   if (!request.symbol.trim()) {
-    throw new Error("Order symbol is required.");
+    throw new Error(
+      "Order symbol is required.",
+    );
   }
 
   if (
@@ -289,16 +487,6 @@ export function validateOrderRequest(
       "Market orders must not specify a price.",
     );
   }
-
-  if (
-    request.type === "LIMIT_MAKER" &&
-    request.side !== "BUY" &&
-    request.side !== "SELL"
-  ) {
-    throw new Error(
-      "LIMIT_MAKER requires a valid order side.",
-    );
-  }
 }
 
 export interface PreparedOrder {
@@ -311,52 +499,24 @@ export interface PreparedOrder {
   clientOrderId?: string;
 }
 
-function floorToStep(value: number, step: number): number {
-  if (step <= 0) return value;
-
-  const precision = Math.max(
-    0,
-    Math.ceil(-Math.log10(step)) + 8,
-  );
-
-  const result =
-    Math.floor((value + Number.EPSILON) / step) * step;
-
-  return Number(result.toFixed(precision));
-}
-
-function roundToTick(value: number, tick: number): number {
-  if (tick <= 0) return value;
-
-  const precision = Math.max(
-    0,
-    Math.ceil(-Math.log10(tick)) + 8,
-  );
-
-  const result =
-    Math.round((value + Number.EPSILON) / tick) * tick;
-
-  return Number(result.toFixed(precision));
-}
-
 export function normalizeOrderQuantity(
   quantity: number,
   filter: SymbolFilter,
 ): number {
-  if (!Number.isFinite(quantity) || quantity <= 0) {
+  if (
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
     throw new Error(
       "Order quantity must be greater than zero.",
     );
   }
 
-  let normalized = quantity;
-
-  if (filter.stepSize !== undefined) {
-    normalized = floorToStep(
-      normalized,
-      filter.stepSize,
+  let normalized =
+    floorToStep(
+      quantity,
+      filter.stepSize ?? 0,
     );
-  }
 
   if (
     filter.minQty !== undefined &&
@@ -389,20 +549,20 @@ export function normalizeOrderPrice(
   price: number,
   filter: SymbolFilter,
 ): number {
-  if (!Number.isFinite(price) || price <= 0) {
+  if (
+    !Number.isFinite(price) ||
+    price <= 0
+  ) {
     throw new Error(
       "Order price must be greater than zero.",
     );
   }
 
-  let normalized = price;
-
-  if (filter.tickSize !== undefined) {
-    normalized = roundToTick(
-      normalized,
-      filter.tickSize,
+  let normalized =
+    roundToTick(
+      price,
+      filter.tickSize ?? 0,
     );
-  }
 
   if (
     filter.minPrice !== undefined &&
@@ -435,17 +595,57 @@ export function validateOrderNotional(
   quantity: number,
   price: number,
   filter: SymbolFilter,
+  options: {
+    market?: boolean;
+  } = {},
 ): void {
-  if (filter.minNotional === undefined) {
+  const market =
+    options.market === true;
+
+  if (
+    market &&
+    filter.applyMinNotionalToMarket === false
+  ) {
     return;
   }
 
-  const notional = quantity * price;
+  if (
+    filter.minNotional !== undefined
+  ) {
+    const notional =
+      quantity * price;
 
-  if (notional < filter.minNotional) {
-    throw new Error(
-      `Order notional is below minimum notional: ${filter.minNotional}`,
-    );
+    if (
+      notional <
+      filter.minNotional
+    ) {
+      throw new Error(
+        `Order notional is below minimum notional: ${filter.minNotional}`,
+      );
+    }
+  }
+
+  if (
+    market &&
+    filter.applyMaxNotionalToMarket === false
+  ) {
+    return;
+  }
+
+  if (
+    filter.maxNotional !== undefined
+  ) {
+    const notional =
+      quantity * price;
+
+    if (
+      notional >
+      filter.maxNotional
+    ) {
+      throw new Error(
+        `Order notional exceeds maximum notional: ${filter.maxNotional}`,
+      );
+    }
   }
 }
 
@@ -459,25 +659,66 @@ export function prepareOrder(
     symbol: request.symbol,
     side: request.side,
     type: request.type,
-    clientOrderId: request.clientOrderId,
+    clientOrderId:
+      request.clientOrderId,
   };
 
+  const isMarket =
+    request.type === "MARKET";
+
   if (request.quantity !== undefined) {
-    prepared.quantity = normalizeOrderQuantity(
-      request.quantity,
-      filter,
-    );
+    prepared.quantity =
+      isMarket
+        ? normalizeMarketQuantity(
+            request.quantity,
+            {
+              symbol: request.symbol,
+              filters: filter,
+            },
+          )
+        : normalizeOrderQuantity(
+            request.quantity,
+            filter,
+          );
   }
 
-  if (request.quoteOrderQty !== undefined) {
-    prepared.quoteOrderQty = request.quoteOrderQty;
+  if (
+    request.quoteOrderQty !== undefined
+  ) {
+    prepared.quoteOrderQty =
+      request.quoteOrderQty;
+
+    if (
+      isMarket &&
+      filter.minNotional !== undefined &&
+      filter.applyMinNotionalToMarket !== false &&
+      prepared.quoteOrderQty <
+        filter.minNotional
+    ) {
+      throw new Error(
+        `Order quote amount is below minimum notional: ${filter.minNotional}`,
+      );
+    }
+
+    if (
+      isMarket &&
+      filter.maxNotional !== undefined &&
+      filter.applyMaxNotionalToMarket !== false &&
+      prepared.quoteOrderQty >
+        filter.maxNotional
+    ) {
+      throw new Error(
+        `Order quote amount exceeds maximum notional: ${filter.maxNotional}`,
+      );
+    }
   }
 
   if (request.price !== undefined) {
-    prepared.price = normalizeOrderPrice(
-      request.price,
-      filter,
-    );
+    prepared.price =
+      normalizeOrderPrice(
+        request.price,
+        filter,
+      );
   }
 
   if (
@@ -488,6 +729,9 @@ export function prepareOrder(
       prepared.quantity,
       prepared.price,
       filter,
+      {
+        market: isMarket,
+      },
     );
   }
 

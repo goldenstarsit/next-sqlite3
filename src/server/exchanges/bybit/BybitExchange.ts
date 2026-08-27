@@ -499,6 +499,11 @@ export class BybitExchange implements Exchange {
           info.lotSizeFilter?.minOrderAmt,
         ),
 
+      maxNotional:
+        this.numberOrUndefined(
+          info.lotSizeFilter?.maxOrderAmt,
+        ),
+
       tickSize:
         this.numberOrUndefined(
           info.priceFilter?.tickSize,

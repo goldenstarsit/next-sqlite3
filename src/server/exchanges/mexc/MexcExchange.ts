@@ -263,7 +263,13 @@ export class MexcExchange implements Exchange {
       minQty?: number;
       maxQty?: number;
       stepSize?: number;
+      marketMinQty?: number;
+      marketMaxQty?: number;
+      marketStepSize?: number;
       minNotional?: number;
+      maxNotional?: number;
+      applyMinNotionalToMarket?: boolean;
+      applyMaxNotionalToMarket?: boolean;
       tickSize?: number;
       minPrice?: number;
       maxPrice?: number;
@@ -274,7 +280,7 @@ export class MexcExchange implements Exchange {
         filter.filterType ?? filter.type ?? "",
       ).toUpperCase();
 
-      if (type.includes("LOT")) {
+      if (type === "LOT_SIZE") {
         if (filter.minQty !== undefined) {
           result.minQty = Number(filter.minQty);
         }
@@ -288,26 +294,67 @@ export class MexcExchange implements Exchange {
         }
       }
 
+      if (type === "MARKET_LOT_SIZE") {
+        if (filter.minQty !== undefined) {
+          result.marketMinQty =
+            Number(filter.minQty);
+        }
+
+        if (filter.maxQty !== undefined) {
+          result.marketMaxQty =
+            Number(filter.maxQty);
+        }
+
+        if (filter.stepSize !== undefined) {
+          result.marketStepSize =
+            Number(filter.stepSize);
+        }
+      }
+
       if (
         type.includes("NOTIONAL") ||
         type.includes("MIN_NOTIONAL")
       ) {
         if (filter.minNotional !== undefined) {
-          result.minNotional = Number(filter.minNotional);
+          result.minNotional =
+            Number(filter.minNotional);
+        }
+
+        if (filter.maxNotional !== undefined) {
+          result.maxNotional =
+            Number(filter.maxNotional);
+        }
+
+        if (filter.applyToMarket !== undefined) {
+          result.applyMinNotionalToMarket =
+            Boolean(filter.applyToMarket);
+        }
+
+        if (filter.applyMinToMarket !== undefined) {
+          result.applyMinNotionalToMarket =
+            Boolean(filter.applyMinToMarket);
+        }
+
+        if (filter.applyMaxToMarket !== undefined) {
+          result.applyMaxNotionalToMarket =
+            Boolean(filter.applyMaxToMarket);
         }
       }
 
       if (type.includes("PRICE")) {
         if (filter.minPrice !== undefined) {
-          result.minPrice = Number(filter.minPrice);
+          result.minPrice =
+            Number(filter.minPrice);
         }
 
         if (filter.maxPrice !== undefined) {
-          result.maxPrice = Number(filter.maxPrice);
+          result.maxPrice =
+            Number(filter.maxPrice);
         }
 
         if (filter.tickSize !== undefined) {
-          result.tickSize = Number(filter.tickSize);
+          result.tickSize =
+            Number(filter.tickSize);
         }
       }
     }
