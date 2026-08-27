@@ -4,6 +4,7 @@ import { normalizeOrderStatus } from "../core/types";
 import { createMexcError } from "./MexcError";
 import { normalizeExchangeError } from "../core/ExchangeError";
 import { prepareOrder } from "../core/OrderRules";
+import { MexcMarketDataStream } from "./MexcMarketDataStream";
 
 import type {
   Exchange,
@@ -161,10 +162,8 @@ export class MexcExchange implements Exchange {
     return Number(data.price);
   }
 
-  createMarketDataStream(): import("../core/market-data").MarketDataStream {
-    throw new Error(
-      "Market data stream is not implemented yet.",
-    );
+  createMarketDataStream() {
+    return new MexcMarketDataStream();
   }
 
   async createOrder(
