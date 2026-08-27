@@ -1,3 +1,5 @@
+import type { MarketDataStream } from "./market-data";
+
 export type ExchangeOrderSide = "BUY" | "SELL";
 
 export type ExchangeOrderType =
@@ -135,6 +137,8 @@ export interface Exchange {
   getBalance(asset: string): Promise<ExchangeBalance | undefined>;
 
   getPrice(symbol: string): Promise<number>;
+
+  createMarketDataStream(): MarketDataStream;
 
   createOrder(
     request: ExchangeOrderRequest,

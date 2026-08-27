@@ -161,6 +161,12 @@ export class MexcExchange implements Exchange {
     return Number(data.price);
   }
 
+  createMarketDataStream(): import("../core/market-data").MarketDataStream {
+    throw new Error(
+      "Market data stream is not implemented yet.",
+    );
+  }
+
   async createOrder(
     request: ExchangeOrderRequest,
   ): Promise<ExchangeOrder> {

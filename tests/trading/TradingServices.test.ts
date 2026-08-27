@@ -75,6 +75,12 @@ function createMockExchange(): Exchange {
     cancelOrder:
       vi.fn(),
 
+    createMarketDataStream: () => ({
+      subscribe: async () => {},
+      unsubscribe: async () => {},
+      onMarketData: () => () => {},
+      close: () => {},
+    }),
     close: vi.fn(),
   };
 }

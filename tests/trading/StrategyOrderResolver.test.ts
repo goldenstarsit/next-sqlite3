@@ -64,6 +64,12 @@ function createExchange(): Exchange {
       throw new Error("not implemented");
     },
 
+    createMarketDataStream: () => ({
+      subscribe: async () => {},
+      unsubscribe: async () => {},
+      onMarketData: () => () => {},
+      close: () => {},
+    }),
     close: () => {},
   };
 }

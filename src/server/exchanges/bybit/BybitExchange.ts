@@ -305,6 +305,12 @@ export class BybitExchange implements Exchange {
     return Number(ticker.lastPrice);
   }
 
+  createMarketDataStream(): import("../core/market-data").MarketDataStream {
+    throw new Error(
+      "Market data stream is not implemented yet.",
+    );
+  }
+
   async createOrder(
     request: ExchangeOrderRequest,
   ): Promise<ExchangeOrder> {

@@ -77,6 +77,12 @@ function exchange(): Exchange {
       throw new Error();
     },
 
+    createMarketDataStream: () => ({
+      subscribe: async () => {},
+      unsubscribe: async () => {},
+      onMarketData: () => () => {},
+      close: () => {},
+    }),
     close() {},
   };
 }
