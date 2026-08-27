@@ -8,6 +8,7 @@ export class MarketDataManager {
   private readonly streams: MarketDataStream[];
   private readonly handlers = new Set<MarketDataHandler>();
   private readonly removers: (() => void)[] = [];
+  private readonly activeSymbols = new Set<string>();
   private closed = false;
 
   constructor(streams: MarketDataStream[]) {
@@ -27,11 +28,25 @@ export class MarketDataManager {
   ): Promise<void> {
     this.ensureOpen();
 
+    const normalized = this.normalizeSymbols(symbols);
+
+    const newSymbols = normalized.filter(
+      (symbol) => !this.activeSymbols.has(symbol),
+    );
+
+    if (newSymbols.length === 0) {
+      return;
+    }
+
     await Promise.all(
       this.streams.map((stream) =>
-        stream.subscribe(symbols),
+        stream.subscribe(newSymbols),
       ),
     );
+
+    for (const symbol of newSymbols) {
+      this.activeSymbols.add(symbol);
+    }
   }
 
   async unsubscribe(
@@ -39,11 +54,25 @@ export class MarketDataManager {
   ): Promise<void> {
     this.ensureOpen();
 
+    const normalized = this.normalizeSymbols(symbols);
+
+    const activeSymbols = normalized.filter(
+      (symbol) => this.activeSymbols.has(symbol),
+    );
+
+    if (activeSymbols.length === 0) {
+      return;
+    }
+
     await Promise.all(
       this.streams.map((stream) =>
-        stream.unsubscribe(symbols),
+        stream.unsubscribe(activeSymbols),
       ),
     );
+
+    for (const symbol of activeSymbols) {
+      this.activeSymbols.delete(symbol);
+    }
   }
 
   onMarketData(
@@ -64,6 +93,7 @@ export class MarketDataManager {
     }
 
     this.closed = true;
+    this.activeSymbols.clear();
 
     for (const remove of this.removers) {
       remove();
@@ -87,6 +117,18 @@ export class MarketDataManager {
     for (const handler of this.handlers) {
       handler(event);
     }
+  }
+
+  private normalizeSymbols(
+    symbols: string[],
+  ): string[] {
+    return [
+      ...new Set(
+        symbols
+          .map((symbol) => symbol.trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ];
   }
 
   private ensureOpen(): void {

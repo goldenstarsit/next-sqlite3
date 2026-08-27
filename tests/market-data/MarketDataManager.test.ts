@@ -72,6 +72,80 @@ describe("MarketDataManager", () => {
     manager.close();
   });
 
+  it("does not subscribe the same symbol twice", async () => {
+    const stream = createMockStream();
+
+    const manager = new MarketDataManager([
+      stream.stream,
+    ]);
+
+    await manager.subscribe(["BTCUSDT"]);
+    await manager.subscribe(["BTCUSDT"]);
+
+    expect(stream.stream.subscribe)
+      .toHaveBeenCalledTimes(1);
+
+    expect(stream.stream.subscribe)
+      .toHaveBeenCalledWith(["BTCUSDT"]);
+
+    manager.close();
+  });
+
+  it("subscribes only new symbols", async () => {
+    const stream = createMockStream();
+
+    const manager = new MarketDataManager([
+      stream.stream,
+    ]);
+
+    await manager.subscribe([
+      "BTCUSDT",
+      "ETHUSDT",
+    ]);
+
+    await manager.subscribe([
+      "BTCUSDT",
+      "SOLUSDT",
+    ]);
+
+    expect(stream.stream.subscribe)
+      .toHaveBeenNthCalledWith(
+        1,
+        ["BTCUSDT", "ETHUSDT"],
+      );
+
+    expect(stream.stream.subscribe)
+      .toHaveBeenNthCalledWith(
+        2,
+        ["SOLUSDT"],
+      );
+
+    manager.close();
+  });
+
+  it("deduplicates symbols within one subscription", async () => {
+    const stream = createMockStream();
+
+    const manager = new MarketDataManager([
+      stream.stream,
+    ]);
+
+    await manager.subscribe([
+      "btcusdt",
+      "BTCUSDT",
+      " ethusdt ",
+      "ETHUSDT",
+    ]);
+
+    expect(stream.stream.subscribe)
+      .toHaveBeenCalledWith([
+        "BTCUSDT",
+        "ETHUSDT",
+      ]);
+
+    manager.close();
+  });
+
   it("unsubscribes all underlying streams", async () => {
     const first = createMockStream();
     const second = createMockStream();
@@ -79,6 +153,10 @@ describe("MarketDataManager", () => {
     const manager = new MarketDataManager([
       first.stream,
       second.stream,
+    ]);
+
+    await manager.subscribe([
+      "BTCUSDT",
     ]);
 
     await manager.unsubscribe([
@@ -150,6 +228,71 @@ describe("MarketDataManager", () => {
       3,
       bybitEvent,
     );
+
+    manager.close();
+  });
+
+  it("unsubscribes only active symbols", async () => {
+    const stream = createMockStream();
+
+    const manager = new MarketDataManager([
+      stream.stream,
+    ]);
+
+    await manager.subscribe([
+      "BTCUSDT",
+      "ETHUSDT",
+    ]);
+
+    await manager.unsubscribe([
+      "BTCUSDT",
+      "SOLUSDT",
+    ]);
+
+    expect(stream.stream.unsubscribe)
+      .toHaveBeenCalledTimes(1);
+
+    expect(stream.stream.unsubscribe)
+      .toHaveBeenCalledWith([
+        "BTCUSDT",
+      ]);
+
+    manager.close();
+  });
+
+  it("does not unsubscribe an inactive symbol", async () => {
+    const stream = createMockStream();
+
+    const manager = new MarketDataManager([
+      stream.stream,
+    ]);
+
+    await manager.unsubscribe([
+      "BTCUSDT",
+    ]);
+
+    expect(stream.stream.unsubscribe)
+      .not.toHaveBeenCalled();
+
+    manager.close();
+  });
+
+  it("allows a symbol to be subscribed again after unsubscribe", async () => {
+    const stream = createMockStream();
+
+    const manager = new MarketDataManager([
+      stream.stream,
+    ]);
+
+    await manager.subscribe(["BTCUSDT"]);
+    await manager.unsubscribe(["BTCUSDT"]);
+    await manager.subscribe(["BTCUSDT"]);
+
+    expect(stream.stream.subscribe)
+      .toHaveBeenCalledTimes(2);
+
+    expect(stream.stream.unsubscribe)
+      .toHaveBeenCalledTimes(1);
 
     manager.close();
   });
