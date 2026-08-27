@@ -1,6 +1,10 @@
 import crypto from "node:crypto";
 
 import { normalizeOrderStatus } from "../core/types";
+import { createBybitError } from "./BybitError";
+import { normalizeExchangeError } from "../core/ExchangeError";
+import { prepareOrder } from "../core/OrderRules";
+
 import type {
   Exchange,
   ExchangeBalance,
@@ -110,8 +114,9 @@ export class BybitExchange implements Exchange {
       }>;
 
     if (data.retCode !== 0) {
-      throw new Error(
+      throw createBybitError(
         `Bybit API error: ${data.retMsg} (${data.retCode})`,
+        data.retCode,
       );
     }
 
@@ -128,7 +133,7 @@ export class BybitExchange implements Exchange {
       data.result?.timeSecond;
 
     if (!timeSecond) {
-      throw new Error(
+      throw createBybitError(
         "Bybit server time is missing.",
       );
     }
@@ -156,15 +161,16 @@ export class BybitExchange implements Exchange {
       }>;
 
     if (data.retCode !== 0) {
-      throw new Error(
+      throw createBybitError(
         `Bybit API error: ${data.retMsg} (${data.retCode})`,
+        data.retCode,
       );
     }
 
     const info = data.result?.list?.[0];
 
     if (!info) {
-      throw new Error(
+      throw createBybitError(
         `Bybit symbol not found: ${symbol}`,
       );
     }
@@ -281,8 +287,9 @@ export class BybitExchange implements Exchange {
       }>;
 
     if (data.retCode !== 0) {
-      throw new Error(
+      throw createBybitError(
         `Bybit API error: ${data.retMsg} (${data.retCode})`,
+        data.retCode,
       );
     }
 
@@ -290,7 +297,7 @@ export class BybitExchange implements Exchange {
       data.result?.list?.[0];
 
     if (!ticker) {
-      throw new Error(
+      throw createBybitError(
         `Bybit ticker not found: ${symbol}`,
       );
     }
@@ -301,47 +308,53 @@ export class BybitExchange implements Exchange {
   async createOrder(
     request: ExchangeOrderRequest,
   ): Promise<ExchangeOrder> {
+    const symbol = await this.getSymbol(request.symbol);
+
+    const prepared = prepareOrder(
+      request,
+      symbol.filters,
+    );
+
     const body: Record<string, string | number> = {
       category: "spot",
-      symbol: request.symbol.toUpperCase(),
+      symbol: prepared.symbol.toUpperCase(),
       side:
-        request.side === "BUY"
+        prepared.side === "BUY"
           ? "Buy"
           : "Sell",
       orderType:
-        request.type === "MARKET"
+        prepared.type === "MARKET"
           ? "Market"
           : "Limit",
       qty:
-        request.quoteOrderQty !== undefined
-          ? request.quoteOrderQty
-          : request.quantity!,
+        prepared.quoteOrderQty !== undefined
+          ? prepared.quoteOrderQty
+          : prepared.quantity!,
     };
 
     if (
-      request.type === "MARKET" &&
-      request.quoteOrderQty !== undefined
+      prepared.type === "MARKET" &&
+      prepared.quoteOrderQty !== undefined
     ) {
       body.marketUnit = "quoteCoin";
     }
 
     if (
-      request.type === "LIMIT" ||
-      request.type === "LIMIT_MAKER"
+      prepared.type === "LIMIT" ||
+      prepared.type === "LIMIT_MAKER"
     ) {
-      body.price = request.price!;
-
+      body.price = prepared.price!;
       body.timeInForce =
-        request.type === "LIMIT_MAKER"
+        prepared.type === "LIMIT_MAKER"
           ? "PostOnly"
           : "GTC";
     } else {
       body.timeInForce = "IOC";
     }
 
-    if (request.clientOrderId) {
+    if (prepared.clientOrderId) {
       body.orderLinkId =
-        request.clientOrderId;
+        prepared.clientOrderId;
     }
 
     const data =
@@ -359,24 +372,24 @@ export class BybitExchange implements Exchange {
 
     return {
       symbol:
-        request.symbol.toUpperCase(),
+        prepared.symbol.toUpperCase(),
       orderId:
         data.result!.orderId,
       clientOrderId:
         data.result!.orderLinkId ||
-        request.clientOrderId,
+        prepared.clientOrderId,
       side:
-        request.side,
+        prepared.side,
       type:
-        request.type,
+        prepared.type,
       status:
         "NEW",
       price:
-        Number(request.price ?? 0),
+        Number(prepared.price ?? 0),
       originalQuantity:
         Number(
-          request.quantity ??
-          request.quoteOrderQty ??
+          prepared.quantity ??
+          prepared.quoteOrderQty ??
           0,
         ),
       executedQuantity: 0,
@@ -409,8 +422,9 @@ export class BybitExchange implements Exchange {
       data.result?.list?.[0];
 
     if (!order) {
-      throw new Error(
+      throw createBybitError(
         `Bybit order not found: ${orderId}`,
+        110001,
       );
     }
 
@@ -599,8 +613,10 @@ export class BybitExchange implements Exchange {
     parameters: T,
   ): Promise<BybitResponse<R>> {
     if (!this.credentials) {
-      throw new Error(
+      throw createBybitError(
         "Bybit credentials are required for this operation.",
+        10003,
+        401,
       );
     }
 
@@ -663,8 +679,10 @@ export class BybitExchange implements Exchange {
         ? `${BASE_URL}${path}?${query.toString()}`
         : `${BASE_URL}${path}`;
 
-    const response =
-      await fetch(url, {
+    let response: Response;
+
+    try {
+      response = await fetch(url, {
         method,
         headers,
         body:
@@ -673,6 +691,9 @@ export class BybitExchange implements Exchange {
             : undefined,
         cache: "no-store",
       });
+    } catch (error) {
+      throw normalizeExchangeError(error, "bybit");
+    }
 
     if (!response.ok) {
       throw await this.error(response);
@@ -682,8 +703,9 @@ export class BybitExchange implements Exchange {
       await response.json() as BybitResponse<R>;
 
     if (data.retCode !== 0) {
-      throw new Error(
+      throw createBybitError(
         `Bybit API error: ${data.retMsg} (${data.retCode})`,
+        data.retCode,
       );
     }
 
@@ -693,13 +715,17 @@ export class BybitExchange implements Exchange {
   private async request(
     path: string,
   ): Promise<Response> {
-    return fetch(
-      `${BASE_URL}${path}`,
-      {
-        method: "GET",
-        cache: "no-store",
-      },
-    );
+    try {
+      return await fetch(
+        `${BASE_URL}${path}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      );
+    } catch (error) {
+      throw normalizeExchangeError(error, "bybit");
+    }
   }
 
   private async error(
@@ -723,6 +749,10 @@ export class BybitExchange implements Exchange {
       // Keep HTTP error.
     }
 
-    return new Error(message);
+    return createBybitError(
+      message,
+      undefined,
+      response.status,
+    );
   }
 }

@@ -58,10 +58,23 @@ export interface ExchangeConfig {
 }
 
 export interface SymbolFilter {
+  // Normal/base quantity rules.
   minQty?: number;
   maxQty?: number;
   stepSize?: number;
+
+  // Market-order quantity rules.
+  marketMinQty?: number;
+  marketMaxQty?: number;
+  marketStepSize?: number;
+
+  // Notional rules.
   minNotional?: number;
+  maxNotional?: number;
+  applyMinNotionalToMarket?: boolean;
+  applyMaxNotionalToMarket?: boolean;
+
+  // Price rules.
   tickSize?: number;
   minPrice?: number;
   maxPrice?: number;

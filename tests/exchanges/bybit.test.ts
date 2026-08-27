@@ -26,15 +26,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mockFetch(
-  body: unknown,
-  status = 200,
-) {
-  globalThis.fetch = vi.fn().mockResolvedValue(
+function mockFetch(...bodies: unknown[]) {
+  globalThis.fetch = vi.fn().mockImplementation(async () =>
     new Response(
-      JSON.stringify(body),
+      JSON.stringify(bodies.shift()),
       {
-        status,
+        status: 200,
         headers: {
           "Content-Type": "application/json",
         },
@@ -286,14 +283,44 @@ describe("BybitExchange", () => {
   });
 
   it("creates a market order using quantity", async () => {
-    mockFetch({
-      retCode: 0,
-      retMsg: "OK",
-      result: {
-        orderId: "bybit-order-1",
-        orderLinkId: "client-1",
+    mockFetch(
+      {
+  retCode: 0,
+  retMsg: "OK",
+  result: {
+    category: "spot",
+    list: [{
+      symbol: "BTCUSDT",
+      status: "Trading",
+      baseCoin: "BTC",
+      quoteCoin: "USDT",
+      basePrecision: "0.000001",
+      quotePrecision: "0.00000001",
+      priceFilter: {
+        tickSize: "0.01",
+        minPrice: "0.01",
+        maxPrice: "9999999",
       },
-    });
+      lotSizeFilter: {
+        basePrecision: "0.000001",
+        quotePrecision: "0.00000001",
+        minOrderQty: "0.00001",
+        maxOrderQty: "71.73",
+        minOrderAmt: "1",
+        maxOrderAmt: "1000000",
+      },
+    }],
+  },
+},
+      {
+        retCode: 0,
+        retMsg: "OK",
+        result: {
+          orderId: "bybit-order-1",
+          orderLinkId: "client-1",
+        },
+      },
+    );
 
     const exchange =
       new BybitExchange(
@@ -320,7 +347,7 @@ describe("BybitExchange", () => {
       vi.mocked(globalThis.fetch);
 
     const [, request] =
-      fetchMock.mock.calls[0];
+      fetchMock.mock.calls[1];
 
     expect(request?.method).toBe(
       "POST",
@@ -342,14 +369,44 @@ describe("BybitExchange", () => {
   });
 
   it("creates a market buy order using quote amount", async () => {
-    mockFetch({
-      retCode: 0,
-      retMsg: "OK",
-      result: {
-        orderId: "bybit-order-2",
-        orderLinkId: "client-2",
+    mockFetch(
+      {
+  retCode: 0,
+  retMsg: "OK",
+  result: {
+    category: "spot",
+    list: [{
+      symbol: "BTCUSDT",
+      status: "Trading",
+      baseCoin: "BTC",
+      quoteCoin: "USDT",
+      basePrecision: "0.000001",
+      quotePrecision: "0.00000001",
+      priceFilter: {
+        tickSize: "0.01",
+        minPrice: "0.01",
+        maxPrice: "9999999",
       },
-    });
+      lotSizeFilter: {
+        basePrecision: "0.000001",
+        quotePrecision: "0.00000001",
+        minOrderQty: "0.00001",
+        maxOrderQty: "71.73",
+        minOrderAmt: "1",
+        maxOrderAmt: "1000000",
+      },
+    }],
+  },
+},
+      {
+        retCode: 0,
+        retMsg: "OK",
+        result: {
+          orderId: "bybit-order-2",
+          orderLinkId: "client-2",
+        },
+      },
+    );
 
     const exchange =
       new BybitExchange(
@@ -367,7 +424,7 @@ describe("BybitExchange", () => {
       vi.mocked(globalThis.fetch);
 
     const [, request] =
-      fetchMock.mock.calls[0];
+      fetchMock.mock.calls[1];
 
     const body =
       JSON.parse(
@@ -386,14 +443,44 @@ describe("BybitExchange", () => {
   });
 
   it("creates a limit order", async () => {
-    mockFetch({
-      retCode: 0,
-      retMsg: "OK",
-      result: {
-        orderId: "bybit-order-3",
-        orderLinkId: "client-3",
+    mockFetch(
+      {
+  retCode: 0,
+  retMsg: "OK",
+  result: {
+    category: "spot",
+    list: [{
+      symbol: "BTCUSDT",
+      status: "Trading",
+      baseCoin: "BTC",
+      quoteCoin: "USDT",
+      basePrecision: "0.000001",
+      quotePrecision: "0.00000001",
+      priceFilter: {
+        tickSize: "0.01",
+        minPrice: "0.01",
+        maxPrice: "9999999",
       },
-    });
+      lotSizeFilter: {
+        basePrecision: "0.000001",
+        quotePrecision: "0.00000001",
+        minOrderQty: "0.00001",
+        maxOrderQty: "71.73",
+        minOrderAmt: "1",
+        maxOrderAmt: "1000000",
+      },
+    }],
+  },
+},
+      {
+        retCode: 0,
+        retMsg: "OK",
+        result: {
+          orderId: "bybit-order-3",
+          orderLinkId: "client-3",
+        },
+      },
+    );
 
     const exchange =
       new BybitExchange(
@@ -418,7 +505,7 @@ describe("BybitExchange", () => {
       vi.mocked(globalThis.fetch);
 
     const [, request] =
-      fetchMock.mock.calls[0];
+      fetchMock.mock.calls[1];
 
     const body =
       JSON.parse(

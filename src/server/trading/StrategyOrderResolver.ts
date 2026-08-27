@@ -9,7 +9,7 @@ import type {
 
 import {
   normalizeQuantity,
-} from "../exchanges/binance/BinanceFilters";
+} from "../exchanges/core/OrderRules";
 
 export interface StrategyExecutionBalances {
   quoteFree: number;
@@ -122,29 +122,7 @@ export class StrategyOrderResolver {
             requestedQuantity,
             {
               symbol: symbol.symbol,
-
-              price: {
-                minPrice:
-                  symbol.filters.minPrice ?? 0,
-                maxPrice:
-                  symbol.filters.maxPrice ?? 0,
-                tickSize:
-                  symbol.filters.tickSize ?? 0,
-              },
-
-              lotSize: {
-                minQty:
-                  symbol.filters.minQty ?? 0,
-                maxQty:
-                  symbol.filters.maxQty ?? 0,
-                stepSize:
-                  symbol.filters.stepSize,
-              },
-
-              notional: {
-                minNotional:
-                  symbol.filters.minNotional ?? 0,
-              },
+              filters: symbol.filters,
             },
           )
         : requestedQuantity;

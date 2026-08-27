@@ -1,3 +1,15 @@
+import type {
+  OrderRuleSet,
+} from "../core/OrderRules";
+
+import {
+  calculateMinimumOrderAmount as calculateCoreMinimumOrderAmount,
+  calculateMinimumQuantity as calculateCoreMinimumQuantity,
+  normalizePrice as normalizeCorePrice,
+  normalizeQuantity as normalizeCoreQuantity,
+  normalizeStep,
+} from "../core/OrderRules";
+
 export interface PriceFilter {
   minPrice: number;
   maxPrice: number;
@@ -22,44 +34,35 @@ export interface BinanceSymbolFilters {
   notional?: NotionalFilter;
 }
 
-function decimals(value: number): number {
-  const text = value.toString();
-
-  if (!text.includes(".")) {
-    return 0;
-  }
-
-  return text.split(".")[1]?.length ?? 0;
+function toRules(
+  filters: BinanceSymbolFilters,
+): OrderRuleSet {
+  return {
+    symbol: filters.symbol,
+    filters: {
+      minQty: filters.lotSize.minQty,
+      maxQty: filters.lotSize.maxQty,
+      stepSize: filters.lotSize.stepSize,
+      minNotional:
+        filters.notional?.minNotional,
+      tickSize: filters.price.tickSize,
+      minPrice: filters.price.minPrice,
+      maxPrice: filters.price.maxPrice,
+    },
+  };
 }
 
-export function normalizeStep(
-  value: number,
-  step: number,
-): number {
-  if (step <= 0) {
-    return value;
-  }
-
-  const precision = decimals(step);
-
-  const normalized =
-    Math.floor((value + Number.EPSILON) / step) * step;
-
-  return Number(normalized.toFixed(precision));
-}
+export {
+  normalizeStep,
+};
 
 export function normalizePrice(
   price: number,
   filters: BinanceSymbolFilters,
 ): number {
-  const normalized = normalizeStep(
+  return normalizeCorePrice(
     price,
-    filters.price.tickSize,
-  );
-
-  return Math.min(
-    Math.max(normalized, filters.price.minPrice),
-    filters.price.maxPrice,
+    toRules(filters),
   );
 }
 
@@ -67,67 +70,28 @@ export function normalizeQuantity(
   quantity: number,
   filters: BinanceSymbolFilters,
 ): number {
-  const normalized = normalizeStep(
+  return normalizeCoreQuantity(
     quantity,
-    filters.lotSize.stepSize,
-  );
-
-  return Math.min(
-    Math.max(normalized, filters.lotSize.minQty),
-    filters.lotSize.maxQty,
+    toRules(filters),
   );
 }
 
-/**
- * Calculates the minimum valid quantity according to
- * LOT_SIZE and MIN_NOTIONAL/NOTIONAL.
- */
 export function calculateMinimumQuantity(
   price: number,
   filters: BinanceSymbolFilters,
 ): number {
-  let quantity = filters.lotSize.minQty;
-
-  if (filters.notional) {
-    const notionalQuantity =
-      filters.notional.minNotional / price;
-
-    quantity = Math.max(
-      quantity,
-      notionalQuantity,
-    );
-  }
-
-  quantity = normalizeQuantity(
-    quantity,
-    filters,
+  return calculateCoreMinimumQuantity(
+    price,
+    toRules(filters),
   );
-
-  /**
-   * Rounding down can still leave the order below
-   * minimum notional, so move one step upward.
-   */
-  if (
-    filters.notional &&
-    quantity * price < filters.notional.minNotional
-  ) {
-    quantity = normalizeQuantity(
-      quantity + filters.lotSize.stepSize,
-      filters,
-    );
-  }
-
-  return quantity;
 }
 
 export function calculateMinimumOrderAmount(
   price: number,
   filters: BinanceSymbolFilters,
 ): number {
-  const quantity = calculateMinimumQuantity(
+  return calculateCoreMinimumOrderAmount(
     price,
-    filters,
+    toRules(filters),
   );
-
-  return quantity * price;
 }

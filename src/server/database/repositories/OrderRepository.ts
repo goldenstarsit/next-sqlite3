@@ -143,6 +143,39 @@ export class OrderRepository {
     );
   }
 
+  findRecoveryCandidates(): StoredOrder[] {
+    return this.db.all<StoredOrder>(
+      `
+        SELECT o.*
+        FROM orders o
+        WHERE
+          o.status IN (
+            'NEW',
+            'PARTIALLY_FILLED',
+            'FILLED',
+            'CANCELED',
+            'EXPIRED'
+          )
+          AND (
+            o.status IN (
+              'NEW',
+              'PARTIALLY_FILLED'
+            )
+            OR o.executed_quantity > (
+              SELECT COALESCE(
+                SUM(t.quantity),
+                0
+              )
+              FROM trades t
+              WHERE t.exchange = o.exchange
+                AND t.order_id = o.order_id
+            )
+          )
+        ORDER BY o.id ASC
+      `,
+    );
+  }
+
   findAll(): StoredOrder[] {
     return this.db.all<StoredOrder>(
       `

@@ -43,6 +43,10 @@ import {
   ExecutionReconciliationService,
 } from "./ExecutionReconciliationService";
 
+import {
+  ExecutionRecoveryService,
+} from "./ExecutionRecoveryService";
+
 export class TradingServices {
   readonly marketData: MarketDataService;
   readonly balance: BalanceService;
@@ -52,7 +56,17 @@ export class TradingServices {
   readonly tradePersistence: TradePersistenceService;
   readonly accounting: ExecutionAccountingService;
   readonly reconciliation: ExecutionReconciliationService;
+  readonly recovery: ExecutionRecoveryService;
   readonly strategyExecution: StrategyExecutionService;
+
+  private started = false;
+
+  private lastRecoveryResult:
+    Awaited<
+      ReturnType<
+        ExecutionRecoveryService["recover"]
+      >
+    > | undefined;
 
   constructor(
     exchange: Exchange,
@@ -101,11 +115,46 @@ export class TradingServices {
         this.accounting,
       );
 
+    this.recovery =
+      new ExecutionRecoveryService(
+        this.orderPersistence,
+        this.accounting,
+      );
+
     this.strategyExecution =
       new StrategyExecutionService(
         this.order,
         this.orderPersistence,
         this.reconciliation,
       );
+  }
+
+  /**
+   * Starts the trading service lifecycle.
+   *
+   * Database initialization and service construction happen
+   * synchronously in the constructor. Exchange-dependent
+   * recovery is deliberately asynchronous and therefore belongs
+   * here rather than inside the constructor.
+   *
+   * Calling start() more than once is safe.
+   */
+  async start(): Promise<void> {
+    if (this.started) {
+      return;
+    }
+
+    this.lastRecoveryResult =
+      await this.recovery.recover();
+
+    this.started = true;
+  }
+
+  isStarted(): boolean {
+    return this.started;
+  }
+
+  getLastRecoveryResult() {
+    return this.lastRecoveryResult;
   }
 }

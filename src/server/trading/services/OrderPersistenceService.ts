@@ -40,4 +40,18 @@ export class OrderPersistenceService {
   findAll() {
     return this.repository.findAll();
   }
+
+  findRecoveryCandidates() {
+    return this.repository.findRecoveryCandidates();
+  }
+
+  async getExchangeOrder(
+    symbol: string,
+    orderId: string,
+  ) {
+    return this.exchange.getOrder(
+      symbol,
+      orderId,
+    );
+  }
 }

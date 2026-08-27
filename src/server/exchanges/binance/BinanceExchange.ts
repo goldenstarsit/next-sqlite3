@@ -1,6 +1,13 @@
 import crypto from "node:crypto";
 
+import { createBinanceError } from "./BinanceError";
+import {
+  normalizeExchangeError,
+} from "../core/ExchangeError";
+
 import { normalizeOrderStatus } from "../core/types";
+import { prepareOrder } from "../core/OrderRules";
+
 import type {
   Exchange,
   ExchangeBalance,
@@ -97,8 +104,10 @@ export class BinanceExchange implements Exchange {
     const info = data.symbols?.[0];
 
     if (!info) {
-      throw new Error(
+      throw createBinanceError(
         `Binance symbol not found: ${symbol}`,
+        -1121,
+        400,
       );
     }
 
@@ -165,26 +174,33 @@ export class BinanceExchange implements Exchange {
   async createOrder(
     request: ExchangeOrderRequest,
   ): Promise<ExchangeOrder> {
+    const symbol = await this.getSymbol(request.symbol);
+
+    const prepared = prepareOrder(
+      request,
+      symbol.filters,
+    );
+
     const params: Record<string, string | number> = {
-      symbol: request.symbol.toUpperCase(),
-      side: request.side,
-      type: request.type,
+      symbol: prepared.symbol.toUpperCase(),
+      side: prepared.side,
+      type: prepared.type,
     };
 
-    if (request.quantity !== undefined) {
-      params.quantity = request.quantity;
+    if (prepared.quantity !== undefined) {
+      params.quantity = prepared.quantity;
     }
 
-    if (request.quoteOrderQty !== undefined) {
-      params.quoteOrderQty = request.quoteOrderQty;
+    if (prepared.quoteOrderQty !== undefined) {
+      params.quoteOrderQty = prepared.quoteOrderQty;
     }
 
-    if (request.price !== undefined) {
-      params.price = request.price;
+    if (prepared.price !== undefined) {
+      params.price = prepared.price;
     }
 
-    if (request.clientOrderId) {
-      params.newClientOrderId = request.clientOrderId;
+    if (prepared.clientOrderId) {
+      params.newClientOrderId = prepared.clientOrderId;
     }
 
     const response = await this.signedRequest(
@@ -336,8 +352,10 @@ export class BinanceExchange implements Exchange {
     parameters: Record<string, string | number> = {},
   ): Promise<Response> {
     if (!this.credentials) {
-      throw new Error(
+      throw createBinanceError(
         "Binance credentials are required for this operation.",
+        -2015,
+        401,
       );
     }
 
@@ -363,49 +381,90 @@ export class BinanceExchange implements Exchange {
 
     query.set("signature", signature);
 
-    return fetch(
-      `${BASE_URL}${path}?${query.toString()}`,
-      {
-        method,
-        headers: {
-          "X-MBX-APIKEY": this.credentials.apiKey,
-          "Content-Type": "application/json",
+    try {
+      return await fetch(
+        `${BASE_URL}${path}?${query.toString()}`,
+        {
+          method,
+          headers: {
+            "X-MBX-APIKEY": this.credentials.apiKey,
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
         },
-        cache: "no-store",
-      },
-    );
+      );
+    } catch (error) {
+      throw normalizeExchangeError(
+        error,
+        "binance",
+      );
+    }
   }
 
   private async request(
     path: string,
   ): Promise<Response> {
-    return fetch(`${BASE_URL}${path}`, {
-      method: "GET",
-      cache: "no-store",
-    });
+    try {
+      return await fetch(`${BASE_URL}${path}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+    } catch (error) {
+      throw normalizeExchangeError(
+        error,
+        "binance",
+      );
+    }
   }
 
   private async error(
     response: Response,
   ): Promise<Error> {
+    let code: number | undefined;
+
     let message =
-      `Binance API error: HTTP ${response.status}`;
+      `Binance request failed with HTTP ${response.status}.`;
 
     try {
-      const data =
-        await response.json() as BinanceResponse;
+      const data = await response.json() as {
+        code?: number;
+        msg?: string;
+        message?: string;
+      };
 
-      if (data.msg) {
-        message += ` - ${data.msg}`;
+      if (typeof data.code === "number") {
+        code = data.code;
       }
 
-      if (data.code !== undefined) {
-        message += ` (${data.code})`;
+      if (
+        typeof data.msg === "string" &&
+        data.msg
+      ) {
+        message = data.msg;
+      } else if (
+        typeof data.message === "string" &&
+        data.message
+      ) {
+        message = data.message;
       }
     } catch {
-      // Keep HTTP error when response is not JSON.
+      // Keep HTTP fallback message.
     }
 
-    return new Error(message);
+    const legacyMessage =
+      `Binance API error: HTTP ${response.status}` +
+      (message !==
+        `Binance request failed with HTTP ${response.status}.`
+        ? ` - ${message}`
+        : "") +
+      (code !== undefined
+        ? ` (${code})`
+        : "");
+
+    return createBinanceError(
+      legacyMessage,
+      code,
+      response.status,
+    );
   }
 }

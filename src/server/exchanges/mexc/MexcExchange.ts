@@ -1,6 +1,10 @@
 import crypto from "node:crypto";
 
 import { normalizeOrderStatus } from "../core/types";
+import { createMexcError } from "./MexcError";
+import { normalizeExchangeError } from "../core/ExchangeError";
+import { prepareOrder } from "../core/OrderRules";
+
 import type {
   Exchange,
   ExchangeBalance,
@@ -95,7 +99,7 @@ export class MexcExchange implements Exchange {
     const info = Array.isArray(data) ? data[0] : data;
 
     if (!info) {
-      throw new Error(`MEXC symbol not found: ${symbol}`);
+      throw createMexcError(`MEXC symbol not found: ${symbol}`);
     }
 
     return {
@@ -160,26 +164,33 @@ export class MexcExchange implements Exchange {
   async createOrder(
     request: ExchangeOrderRequest,
   ): Promise<ExchangeOrder> {
+    const symbol = await this.getSymbol(request.symbol);
+
+    const prepared = prepareOrder(
+      request,
+      symbol.filters,
+    );
+
     const params: Record<string, string | number> = {
-      symbol: request.symbol.toUpperCase(),
-      side: request.side,
-      type: request.type,
+      symbol: prepared.symbol.toUpperCase(),
+      side: prepared.side,
+      type: prepared.type,
     };
 
-    if (request.quantity !== undefined) {
-      params.quantity = request.quantity;
+    if (prepared.quantity !== undefined) {
+      params.quantity = prepared.quantity;
     }
 
-    if (request.quoteOrderQty !== undefined) {
-      params.quoteOrderQty = request.quoteOrderQty;
+    if (prepared.quoteOrderQty !== undefined) {
+      params.quoteOrderQty = prepared.quoteOrderQty;
     }
 
-    if (request.price !== undefined) {
-      params.price = request.price;
+    if (prepared.price !== undefined) {
+      params.price = prepared.price;
     }
 
-    if (request.clientOrderId) {
-      params.newClientOrderId = request.clientOrderId;
+    if (prepared.clientOrderId) {
+      params.newClientOrderId = prepared.clientOrderId;
     }
 
     const response = await this.signedRequest(
@@ -326,8 +337,10 @@ export class MexcExchange implements Exchange {
     parameters: Record<string, string | number> = {},
   ): Promise<Response> {
     if (!this.credentials) {
-      throw new Error(
+      throw createMexcError(
         "MEXC credentials are required for this operation.",
+        700002,
+        401,
       );
     }
 
@@ -349,26 +362,34 @@ export class MexcExchange implements Exchange {
 
     query.set("signature", signature);
 
-    return fetch(
-      `${BASE_URL}${path}?${query.toString()}`,
-      {
-        method,
-        headers: {
-          "X-MEXC-APIKEY": this.credentials.apiKey,
-          "Content-Type": "application/json",
+    try {
+      return await fetch(
+        `${BASE_URL}${path}?${query.toString()}`,
+        {
+          method,
+          headers: {
+            "X-MEXC-APIKEY": this.credentials.apiKey,
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
         },
-        cache: "no-store",
-      },
-    );
+      );
+    } catch (error) {
+      throw normalizeExchangeError(error, "mexc");
+    }
   }
 
   private async request(
     path: string,
   ): Promise<Response> {
-    return fetch(`${BASE_URL}${path}`, {
-      method: "GET",
-      cache: "no-store",
-    });
+    try {
+      return await fetch(`${BASE_URL}${path}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+    } catch (error) {
+      throw normalizeExchangeError(error, "mexc");
+    }
   }
 
   private async error(
@@ -390,6 +411,10 @@ export class MexcExchange implements Exchange {
       // Keep HTTP error if response is not JSON.
     }
 
-    return new Error(message);
+    return createMexcError(
+      message,
+      undefined,
+      response.status,
+    );
   }
 }

@@ -361,7 +361,45 @@ describe("BinanceExchange", () => {
   describe("orders", () => {
     it("creates a market order with quantity", async () => {
       const fetchMock =
-        vi.fn().mockResolvedValue(
+        vi.fn()
+          .mockResolvedValueOnce(
+            jsonResponse({
+              symbols: [
+                {
+                  symbol: "BTCUSDT",
+                  status: "TRADING",
+                  baseAsset: "BTC",
+                  quoteAsset: "USDT",
+                  baseAssetPrecision: 8,
+                  quoteAssetPrecision: 8,
+                  orderTypes: [
+                    "LIMIT",
+                    "MARKET",
+                  ],
+                  filters: [
+                    {
+                      filterType: "PRICE_FILTER",
+                      minPrice: "0.01000000",
+                      maxPrice: "1000000.00000000",
+                      tickSize: "0.01000000",
+                    },
+                    {
+                      filterType: "LOT_SIZE",
+                      minQty: "0.00001000",
+                      maxQty: "1000.00000000",
+                      stepSize: "0.00001000",
+                    },
+                    {
+                      filterType: "MIN_NOTIONAL",
+                      minNotional: "5.00000000",
+                    },
+                  ],
+                },
+              ],
+            }),
+          )
+          .mockResolvedValueOnce(
+
           jsonResponse({
             symbol: "BTCUSDT",
             orderId: 12345,
@@ -406,7 +444,7 @@ describe("BinanceExchange", () => {
       });
 
       const [url, request] =
-        fetchMock.mock.calls[0];
+        fetchMock.mock.calls[1];
 
       expect(
         url,
@@ -444,7 +482,45 @@ describe("BinanceExchange", () => {
 
     it("creates an order using quoteOrderQty", async () => {
       const fetchMock =
-        vi.fn().mockResolvedValue(
+        vi.fn()
+          .mockResolvedValueOnce(
+            jsonResponse({
+              symbols: [
+                {
+                  symbol: "BTCUSDT",
+                  status: "TRADING",
+                  baseAsset: "BTC",
+                  quoteAsset: "USDT",
+                  baseAssetPrecision: 8,
+                  quoteAssetPrecision: 8,
+                  orderTypes: [
+                    "LIMIT",
+                    "MARKET",
+                  ],
+                  filters: [
+                    {
+                      filterType: "PRICE_FILTER",
+                      minPrice: "0.01000000",
+                      maxPrice: "1000000.00000000",
+                      tickSize: "0.01000000",
+                    },
+                    {
+                      filterType: "LOT_SIZE",
+                      minQty: "0.00001000",
+                      maxQty: "1000.00000000",
+                      stepSize: "0.00001000",
+                    },
+                    {
+                      filterType: "MIN_NOTIONAL",
+                      minNotional: "5.00000000",
+                    },
+                  ],
+                },
+              ],
+            }),
+          )
+          .mockResolvedValueOnce(
+
           jsonResponse({
             symbol: "BTCUSDT",
             orderId: 123,
@@ -473,7 +549,7 @@ describe("BinanceExchange", () => {
       });
 
       const [url] =
-        fetchMock.mock.calls[0];
+        fetchMock.mock.calls[1];
 
       const parsed =
         new URL(url);
