@@ -7,6 +7,7 @@ import {
 
 import { normalizeOrderStatus } from "../core/types";
 import { prepareOrder } from "../core/OrderRules";
+import { BinanceMarketDataStream } from "./BinanceMarketDataStream";
 
 import type {
   Exchange,
@@ -171,10 +172,8 @@ export class BinanceExchange implements Exchange {
     return Number(data.price);
   }
 
-  createMarketDataStream(): import("../core/market-data").MarketDataStream {
-    throw new Error(
-      "Market data stream is not implemented yet.",
-    );
+  createMarketDataStream() {
+    return new BinanceMarketDataStream();
   }
 
   async createOrder(
